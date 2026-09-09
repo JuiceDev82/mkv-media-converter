@@ -58,6 +58,7 @@ internal static class ProgramEntry
         string? mkvPropEditPath = null;
         var skipFragment = @"\Processing\";
         string? outputPath = null;
+        var languages = new List<string>();
         var dryRun = false;
         var traverseSubfolders = true;
         var maintainFolderStructure = false;
@@ -103,6 +104,13 @@ internal static class ProgramEntry
                 continue;
             }
 
+            if (arg.Equals("--languages", StringComparison.OrdinalIgnoreCase) ||
+                arg.Equals("--language", StringComparison.OrdinalIgnoreCase))
+            {
+                languages.AddRange(SplitLanguages(RequireValue(args, ref index, arg)));
+                continue;
+            }
+
             if (arg.Equals("--skip", StringComparison.OrdinalIgnoreCase))
             {
                 skipFragment = RequireValue(args, ref index, arg);
@@ -144,12 +152,19 @@ internal static class ProgramEntry
             MkvMergePath = mkvMergePath is null ? new MediaConverterOptions().MkvMergePath : Path.GetFullPath(mkvMergePath),
             MkvPropEditPath = mkvPropEditPath is null ? new MediaConverterOptions().MkvPropEditPath : Path.GetFullPath(mkvPropEditPath),
             SkipFragment = skipFragment,
+            Languages = languages.Count == 0 ? [LanguageCatalog.DefaultCode] : languages,
             OutputPath = string.IsNullOrWhiteSpace(outputPath) ? null : Path.GetFullPath(outputPath),
             OverwriteExisting = true,
             TraverseSubfolders = traverseSubfolders,
             MaintainFolderStructure = maintainFolderStructure,
             DryRun = dryRun,
         };
+    }
+
+    private static IEnumerable<string> SplitLanguages(string value)
+    {
+        return value
+            .Split([',', ';', ' '], StringSplitOptions.RemoveEmptyEntries | StringSplitOptions.TrimEntries);
     }
 
     private static string RequireValue(string[] args, ref int index, string option)
@@ -179,13 +194,27 @@ internal static class ProgramEntry
         Console.WriteLine("  --mkvmerge <path>      Path to mkvmerge.exe");
         Console.WriteLine("  --mkvpropedit <path>   Path to mkvpropedit.exe");
         Console.WriteLine("  --output <path>        Optional output folder. Converted MKVs go directly there");
+        Console.WriteLine("  --languages <codes>    Audio/subtitle languages to keep. Default: eng");
         Console.WriteLine("  --skip <fragment>      Path fragment to skip. Default: \\Processing\\");
         Console.WriteLine("  --no-subfolders        Process only the input folder itself");
         Console.WriteLine("  --maintain-structure   Recreate input subfolders under --output");
         Console.WriteLine("  --dry-run              Show what would happen without changing files");
         Console.WriteLine("  --help                 Show this help");
         Console.WriteLine();
+        Console.WriteLine("Languages:");
+        Console.WriteLine("  Comma-separated ISO 639 codes, e.g. --languages eng,spa,jpn");
+        Console.WriteLine("  Undetermined (und) is always kept, so untagged tracks are never dropped.");
+        Console.WriteLine();
+
+        foreach (var chunk in LanguageCatalog.All.Chunk(4))
+        {
+            Console.WriteLine("  " + string.Join("  ", chunk.Select(option => $"{option.Code} {option.DisplayName}".PadRight(16))).TrimEnd());
+        }
+
+        Console.WriteLine();
+        Console.WriteLine("  Any other ISO 639 code works too; the list above is just the common ones.");
+        Console.WriteLine();
         Console.WriteLine("Example:");
-        Console.WriteLine(@"  MediaMkvConverter ""D:\Videos\Movies"" --output ""E:\Converted"" --skip ""\Processing\""");
+        Console.WriteLine(@"  MediaMkvConverter ""D:\Videos\Movies"" --output ""E:\Converted"" --languages eng,fre");
     }
 }

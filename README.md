@@ -1,19 +1,41 @@
 # Media MKV Converter
 
-Batch MKV remuxer that drives the [MKVToolNix](https://mkvtoolnix.download/) command-line tools. It walks a folder of media files, strips them down to English/undetermined audio and subtitle tracks, removes cruft (titles, tags, attachments, chapters), and normalises subtitle track flags and names — so a library ends up with consistent, clean MKVs.
+Batch MKV remuxer that drives the [MKVToolNix](https://mkvtoolnix.download/) command-line tools. It walks a folder of media files, strips them down to the audio and subtitle languages you want to keep (English by default), removes cruft (titles, tags, attachments, chapters), and normalises subtitle track flags and names — so a library ends up with consistent, clean MKVs.
 
 Remuxing only: no re-encoding, so video and audio are copied bit-for-bit and runs are I/O-bound rather than CPU-bound.
 
 ## What it does to each file
 
 1. **Inspect** — `mkvmerge -J` the source and parse the JSON track layout.
-2. **Remux** — write a temporary sibling file keeping only `eng` and `und` audio/subtitle tracks, dropping the title, global and per-track tags, attachments, and chapters.
+2. **Remux** — write a temporary sibling file keeping only the selected languages, dropping the title, global and per-track tags, attachments, and chapters.
 3. **Replace** — move the temp file into place (in-place) or into a destination folder (`--output`).
 4. **Retag** — re-inspect the result with `mkvpropedit`: set forced flags on subtitle tracks that look forced, clear every non-forced track name, and name the forced ones `Forced`.
 
 A subtitle track counts as forced when its name contains `forced` or `foreign`, or when its `forced_track` flag is already set.
 
 Supported inputs: `.mkv`, `.mp4`, `.avi`. Output is always MKV.
+
+## Languages
+
+By default the tool keeps English only. Pass `--languages` (console) or tick boxes under **Settings → Languages** (GUI) to keep more:
+
+```powershell
+MediaMkvConverter "D:\Videos" --languages eng,fre,jpn
+```
+
+| Code | Language | Code | Language | Code | Language |
+| --- | --- | --- | --- | --- | --- |
+| `eng` | English | `por` | Portuguese | `kor` | Korean |
+| `spa` | Spanish | `rus` | Russian | `chi` | Chinese |
+| `fre` | French | `jpn` | Japanese | `hin` | Hindi |
+| `ger` | German | `ita` | Italian | | |
+
+Any other ISO 639 code works too — the list above is only what the GUI offers as checkboxes. Codes with two ISO 639-2 spellings are interchangeable (`fra`/`fre`, `deu`/`ger`, `zho`/`chi`).
+
+Two rules apply on every run:
+
+- **Undetermined (`und`) is always kept.** mkvmerge tags a track carrying no language as undetermined, and dropping those could leave a file with no audio.
+- **A file is left untouched if no audio track matches your selection.** You get an error naming the languages that file actually has, rather than a silently muted result — which matters because in-place mode deletes the original.
 
 > **In-place mode deletes the original before moving the remuxed file into place.** A crash in that window loses the source file. Use `--output` (or `--dry-run` first) if that matters to you.
 
@@ -42,6 +64,7 @@ MediaMkvConverter <rootPath> [options]
   --mkvmerge <path>      Path to mkvmerge.exe
   --mkvpropedit <path>   Path to mkvpropedit.exe
   --output <path>        Optional output folder. Converted MKVs go directly there
+  --languages <codes>    Audio/subtitle languages to keep. Default: eng
   --skip <fragment>      Path fragment to skip. Default: \Processing\
   --no-subfolders        Process only the input folder itself
   --maintain-structure   Recreate input subfolders under --output
@@ -55,7 +78,7 @@ Any file whose path contains the skip fragment (`\Processing\` by default) is pa
 
 ## GUI
 
-`Media MKV Converter.Gui` is a WinForms shell over the same engine: input and output folder pickers, the tool paths, the skip fragment, and toggles for subfolder traversal, folder-structure mirroring, overwrite, and dry-run. Progress lines are colour-coded by event kind.
+`Media MKV Converter.Gui` is a WinForms shell over the same engine: input and output folder pickers, the tool paths, the skip fragment, the language checkboxes, and toggles for subfolder traversal, folder-structure mirroring, overwrite, and dry-run. Progress lines are colour-coded by event kind.
 
 ## Project layout
 

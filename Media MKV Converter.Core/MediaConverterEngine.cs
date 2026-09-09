@@ -19,6 +19,12 @@ public sealed class MediaConverterOptions
 
     public string SkipFragment { get; init; } = @"\Processing\";
 
+    /// <summary>
+    /// ISO 639 codes of the audio and subtitle languages to keep. Undetermined ("und") is always
+    /// kept on top of these; see <see cref="LanguageCatalog"/>.
+    /// </summary>
+    public IReadOnlyList<string> Languages { get; init; } = [LanguageCatalog.DefaultCode];
+
     public string? OutputPath { get; init; }
 
     public bool OverwriteExisting { get; init; } = true;
@@ -64,7 +70,6 @@ public sealed class MediaConverterEngine
 {
     private static readonly string[] SupportedExtensions = [".mkv", ".mp4", ".avi"];
     private static readonly string[] ForcedSubtitleKeywords = ["forced", "foreign"];
-    private static readonly string[] SelectedLanguages = ["eng", "und"];
     private readonly JsonSerializerOptions _jsonOptions = new()
     {
         PropertyNameCaseInsensitive = true,
@@ -75,13 +80,13 @@ public sealed class MediaConverterEngine
         IProgress<MediaConverterProgress>? progress = null,
         CancellationToken cancellationToken = default)
     {
-        ValidateOptions(options);
+        var languages = ValidateOptions(options);
 
         var totalStopwatch = Stopwatch.StartNew();
         var files = EnumerateInputFiles(options).ToList();
         progress?.Report(new MediaConverterProgress(
             MediaConverterEventKind.RunStarted,
-            $"Found {files.Count} supported file(s) under {options.RootPath}",
+            $"Found {files.Count} supported file(s) under {options.RootPath}{Environment.NewLine}Keeping languages: {string.Join(", ", languages)}",
             TotalFiles: files.Count));
 
         var successCount = 0;
@@ -116,7 +121,7 @@ public sealed class MediaConverterEngine
 
             try
             {
-                await ProcessFileAsync(filePath, sequenceIndex, completedCount, files.Count, totalStopwatch, fileStopwatch, options, progress, cancellationToken);
+                await ProcessFileAsync(filePath, sequenceIndex, completedCount, files.Count, totalStopwatch, fileStopwatch, options, languages, progress, cancellationToken);
                 successCount++;
                 completedCount++;
             }
@@ -182,6 +187,7 @@ public sealed class MediaConverterEngine
         Stopwatch totalStopwatch,
         Stopwatch fileStopwatch,
         MediaConverterOptions options,
+        IReadOnlyList<string> languages,
         IProgress<MediaConverterProgress>? progress,
         CancellationToken cancellationToken)
     {
@@ -206,7 +212,8 @@ public sealed class MediaConverterEngine
         }
 
         var originalInfo = await ReadMkvInfoAsync(inputPath, options, cancellationToken);
-        var forcedSubtitlePositions = GetForcedSubtitlePositions(originalInfo);
+        EnsureAudioSurvives(originalInfo, languages);
+        var forcedSubtitlePositions = GetForcedSubtitlePositions(originalInfo, languages);
         var preferredOutputPath = GetPreferredOutputPath(inputPath, options);
         var tempOutputPath = GetTempOutputPath(preferredOutputPath);
 
@@ -233,7 +240,7 @@ public sealed class MediaConverterEngine
             ReportStage("remux", 2, 8);
             await RunProcessAsync(
                 options.MkvMergePath,
-                BuildMkvMergeArguments(inputPath, tempOutputPath),
+                BuildMkvMergeArguments(inputPath, tempOutputPath, languages),
                 "mkvmerge failed",
                 cancellationToken);
 
@@ -452,14 +459,14 @@ public sealed class MediaConverterEngine
         return info;
     }
 
-    private static List<int> GetForcedSubtitlePositions(MkvInfo info)
+    private static List<int> GetForcedSubtitlePositions(MkvInfo info, IReadOnlyList<string> languages)
     {
         var positions = new List<int>();
         var subtitlePosition = 0;
 
         foreach (var track in info.Tracks)
         {
-            if (!ShouldIncludeSubtitleTrack(track))
+            if (!ShouldIncludeSubtitleTrack(track, languages))
             {
                 continue;
             }
@@ -478,16 +485,44 @@ public sealed class MediaConverterEngine
         return positions;
     }
 
-    private static bool ShouldIncludeSubtitleTrack(MkvTrack track)
+    /// <summary>
+    /// Mirrors what <c>--subtitle-tracks</c> will keep, so subtitle-relative forced positions taken
+    /// from the source still line up with the remuxed output. Untagged tracks survive because
+    /// <c>--default-language</c> stamps one on during the remux.
+    /// </summary>
+    private static bool ShouldIncludeSubtitleTrack(MkvTrack track, IReadOnlyList<string> languages) =>
+        IsTrackType(track, "subtitles") && IsLanguageKept(track, languages);
+
+    private static bool IsTrackType(MkvTrack track, string type) =>
+        string.Equals(track.Type, type, StringComparison.OrdinalIgnoreCase);
+
+    private static bool IsLanguageKept(MkvTrack track, IReadOnlyList<string> languages)
     {
-        if (!string.Equals(track.Type, "subtitles", StringComparison.OrdinalIgnoreCase))
+        var language = track.Properties.Language;
+        return string.IsNullOrWhiteSpace(language) || LanguageCatalog.IsSelected(languages, language);
+    }
+
+    /// <summary>
+    /// Guards against remuxing away every audio track. In-place mode deletes the source, so a
+    /// language selection the file cannot satisfy would otherwise destroy the only copy.
+    /// </summary>
+    private static void EnsureAudioSurvives(MkvInfo info, IReadOnlyList<string> languages)
+    {
+        var audioTracks = info.Tracks.Where(track => IsTrackType(track, "audio")).ToList();
+        if (audioTracks.Count == 0 || audioTracks.Any(track => IsLanguageKept(track, languages)))
         {
-            return false;
+            return;
         }
 
-        var language = track.Properties.Language;
-        return string.IsNullOrWhiteSpace(language) ||
-            SelectedLanguages.Contains(language, StringComparer.OrdinalIgnoreCase);
+        var available = audioTracks
+            .Select(track => string.IsNullOrWhiteSpace(track.Properties.Language) ? "und" : track.Properties.Language!)
+            .Distinct(StringComparer.OrdinalIgnoreCase)
+            .Order(StringComparer.OrdinalIgnoreCase);
+
+        throw new InvalidOperationException(
+            $"No audio track matches the selected languages ({string.Join(", ", languages)}). " +
+            $"This file only has: {string.Join(", ", available)}. " +
+            "Left unchanged so it keeps its audio.");
     }
 
     private static List<int> GetNamedTrackPositions(MkvInfo info)
@@ -527,19 +562,21 @@ public sealed class MediaConverterEngine
         return null;
     }
 
-    private static string BuildMkvMergeArguments(string inputPath, string outputPath)
+    private static string BuildMkvMergeArguments(string inputPath, string outputPath, IReadOnlyList<string> languages)
     {
+        var trackLanguages = string.Join(',', languages);
+
         return string.Join(
             ' ',
             [
                 "--output",
                 $"\"{outputPath}\"",
                 "--audio-tracks",
-                "eng,und",
+                trackLanguages,
                 "--subtitle-tracks",
-                "eng,und",
+                trackLanguages,
                 "--default-language",
-                "eng",
+                LanguageCatalog.GetDefaultLanguage(languages),
                 "--title",
                 "\"\"",
                 "--no-global-tags",
@@ -583,7 +620,8 @@ public sealed class MediaConverterEngine
         }
     }
 
-    private static void ValidateOptions(MediaConverterOptions options)
+    /// <summary>Validates the options and returns the language codes the run will keep.</summary>
+    private static IReadOnlyList<string> ValidateOptions(MediaConverterOptions options)
     {
         if (string.IsNullOrWhiteSpace(options.RootPath))
         {
@@ -605,10 +643,21 @@ public sealed class MediaConverterEngine
             throw new ArgumentException($"mkvpropedit.exe not found: {options.MkvPropEditPath}");
         }
 
+        foreach (var code in options.Languages ?? [])
+        {
+            if (!string.IsNullOrWhiteSpace(code) && !LanguageCatalog.IsValidCode(code.Trim()))
+            {
+                throw new ArgumentException(
+                    $"Invalid language code: '{code}'. Use ISO 639 codes such as eng, spa or fre.");
+            }
+        }
+
         if (!string.IsNullOrWhiteSpace(options.OutputPath))
         {
             Directory.CreateDirectory(options.OutputPath);
         }
+
+        return LanguageCatalog.Normalize(options.Languages);
     }
 
     private static async Task<ProcessResult> RunProcessAsync(

@@ -25,6 +25,7 @@ public partial class MainForm : Form
         chkOverwrite.Checked = true;
         chkTraverseSubfolders.Checked = true;
         chkMaintainFolderStructure.Checked = false;
+        PopulateLanguages();
         SetAdvancedVisibility(false);
         UpdateRunningState(false);
         UpdateSkipDirectoryState();
@@ -175,6 +176,17 @@ public partial class MainForm : Form
         }
     }
 
+    private void PopulateLanguages()
+    {
+        clbLanguages.DisplayMember = nameof(LanguageOption.DisplayName);
+
+        foreach (var option in LanguageCatalog.All)
+        {
+            var index = clbLanguages.Items.Add(option);
+            clbLanguages.SetItemChecked(index, option.Code == LanguageCatalog.DefaultCode);
+        }
+    }
+
     private MediaConverterOptions BuildOptions()
     {
         var inputFolder = txtInputFolder.Text.Trim();
@@ -200,9 +212,20 @@ public partial class MainForm : Form
             throw new ArgumentException("Enter the path to mkvpropedit.exe.");
         }
 
+        var languages = clbLanguages.CheckedItems
+            .Cast<LanguageOption>()
+            .Select(option => option.Code)
+            .ToList();
+
+        if (languages.Count == 0)
+        {
+            throw new ArgumentException("Select at least one language to keep.");
+        }
+
         var outputFolder = txtOutputFolder.Text.Trim();
         return new MediaConverterOptions
         {
+            Languages = languages,
             RootPath = Path.GetFullPath(inputFolder),
             OutputPath = string.IsNullOrWhiteSpace(outputFolder) ? null : Path.GetFullPath(outputFolder),
             OverwriteExisting = chkOverwrite.Checked,
@@ -481,6 +504,8 @@ public partial class MainForm : Form
         txtMkvPropEdit.Enabled = !isRunning;
         chkDryRun.Enabled = !isRunning;
         chkTraverseSubfolders.Enabled = !isRunning;
+        clbLanguages.Enabled = !isRunning;
+        lblLanguages.Enabled = !isRunning;
         UpdateSkipDirectoryState();
         if (!isRunning && progressOverall.Value == 0)
         {
