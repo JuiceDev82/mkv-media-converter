@@ -1,0 +1,18 @@
+﻿<Project Sdk="Microsoft.NET.Sdk">
+
+  <PropertyGroup>
+    <OutputType>WinExe</OutputType>
+    <TargetFramework>net9.0-windows</TargetFramework>
+    <AssemblyName>MediaMkvConverter.Gui</AssemblyName>
+    <RootNamespace>Media_MKV_Converter.Gui</RootNamespace>
+    <LangVersion>latest</LangVersion>
+    <Nullable>enable</Nullable>
+    <UseWindowsForms>true</UseWindowsForms>
+    <ImplicitUsings>enable</ImplicitUsings>
+  </PropertyGroup>
+
+  <ItemGroup>
+    <ProjectReference Include="..\Media MKV Converter.Core\Media MKV Converter.Core.csproj" />
+  </ItemGroup>
+
+</Project>
