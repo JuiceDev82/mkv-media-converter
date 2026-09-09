@@ -26,7 +26,7 @@ Supported inputs: `.mkv`, `.mp4`, `.avi`. Output is always MKV.
 ## Build
 
 ```powershell
-dotnet build "C# Programs.sln"              # everything
+dotnet build "Media MKV Converter.sln"      # everything
 dotnet build "Media MKV Converter.Gui"      # just the GUI
 ```
 
