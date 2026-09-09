@@ -66,3 +66,9 @@ Any file whose path contains the skip fragment (`\Processing\` by default) is pa
 | `Media MKV Converter.Gui` | `net9.0-windows` | WinForms front end |
 
 Both front ends are thin: they build a `MediaConverterOptions`, subscribe an `IProgress<MediaConverterProgress>`, and render the events. Features belong in the engine.
+
+## License
+
+[MIT](LICENSE).
+
+MKVToolNix is a separate GPL-2.0 project and is not bundled here — this tool invokes `mkvmerge` and `mkvpropedit` as external processes, so you install and license it on its own terms.
