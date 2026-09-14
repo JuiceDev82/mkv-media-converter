@@ -59,6 +59,7 @@ internal static class ProgramEntry
         var skipFragment = @"\Processing\";
         string? outputPath = null;
         var languages = new List<string>();
+        var trimFromEnd = TimeSpan.Zero;
         var dryRun = false;
         var traverseSubfolders = true;
         var maintainFolderStructure = false;
@@ -111,6 +112,18 @@ internal static class ProgramEntry
                 continue;
             }
 
+            if (arg.Equals("--trim-end", StringComparison.OrdinalIgnoreCase))
+            {
+                var rawTrim = RequireValue(args, ref index, arg);
+                if (!DurationParser.TryParse(rawTrim, out trimFromEnd))
+                {
+                    throw new ArgumentException(
+                        $"Invalid duration for --trim-end: '{rawTrim}'. Try 10m, 90s, 1h30m or 00:10:00.");
+                }
+
+                continue;
+            }
+
             if (arg.Equals("--skip", StringComparison.OrdinalIgnoreCase))
             {
                 skipFragment = RequireValue(args, ref index, arg);
@@ -153,6 +166,7 @@ internal static class ProgramEntry
             MkvPropEditPath = mkvPropEditPath is null ? new MediaConverterOptions().MkvPropEditPath : Path.GetFullPath(mkvPropEditPath),
             SkipFragment = skipFragment,
             Languages = languages.Count == 0 ? [LanguageCatalog.DefaultCode] : languages,
+            TrimFromEnd = trimFromEnd,
             OutputPath = string.IsNullOrWhiteSpace(outputPath) ? null : Path.GetFullPath(outputPath),
             OverwriteExisting = true,
             TraverseSubfolders = traverseSubfolders,
@@ -195,6 +209,7 @@ internal static class ProgramEntry
         Console.WriteLine("  --mkvpropedit <path>   Path to mkvpropedit.exe");
         Console.WriteLine("  --output <path>        Optional output folder. Converted MKVs go directly there");
         Console.WriteLine("  --languages <codes>    Audio/subtitle languages to keep. Default: eng");
+        Console.WriteLine("  --trim-end <duration>  Cut this much off the end, e.g. credits. Default: none");
         Console.WriteLine("  --skip <fragment>      Path fragment to skip. Default: \\Processing\\");
         Console.WriteLine("  --no-subfolders        Process only the input folder itself");
         Console.WriteLine("  --maintain-structure   Recreate input subfolders under --output");
@@ -214,7 +229,13 @@ internal static class ProgramEntry
         Console.WriteLine();
         Console.WriteLine("  Any other ISO 639 code works too; the list above is just the common ones.");
         Console.WriteLine();
+        Console.WriteLine("Trimming:");
+        Console.WriteLine("  --trim-end takes 10m, 90s, 1h30m, 00:10:00 or 10:00. A bare number means minutes.");
+        Console.WriteLine("  mkvmerge cuts on a keyframe, so the result lands near that point, not exactly on it.");
+        Console.WriteLine("  A file shorter than the trim is left alone and reported as a failure.");
+        Console.WriteLine();
         Console.WriteLine("Example:");
         Console.WriteLine(@"  MediaMkvConverter ""D:\Videos\Movies"" --output ""E:\Converted"" --languages eng,fre");
+        Console.WriteLine(@"  MediaMkvConverter ""D:\Videos\Show"" --trim-end 10m");
     }
 }

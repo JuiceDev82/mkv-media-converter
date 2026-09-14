@@ -212,6 +212,12 @@ public partial class MainForm : Form
             throw new ArgumentException("Enter the path to mkvpropedit.exe.");
         }
 
+        if (!DurationParser.TryParse(txtTrimEnd.Text, out var trimFromEnd))
+        {
+            throw new ArgumentException(
+                $"'{txtTrimEnd.Text.Trim()}' is not a valid duration. Try 10m, 90s, 1h30m or 00:10:00.");
+        }
+
         var languages = clbLanguages.CheckedItems
             .Cast<LanguageOption>()
             .Select(option => option.Code)
@@ -226,6 +232,7 @@ public partial class MainForm : Form
         return new MediaConverterOptions
         {
             Languages = languages,
+            TrimFromEnd = trimFromEnd,
             RootPath = Path.GetFullPath(inputFolder),
             OutputPath = string.IsNullOrWhiteSpace(outputFolder) ? null : Path.GetFullPath(outputFolder),
             OverwriteExisting = chkOverwrite.Checked,
@@ -506,6 +513,8 @@ public partial class MainForm : Form
         chkTraverseSubfolders.Enabled = !isRunning;
         clbLanguages.Enabled = !isRunning;
         lblLanguages.Enabled = !isRunning;
+        txtTrimEnd.Enabled = !isRunning;
+        lblTrimEnd.Enabled = !isRunning;
         UpdateSkipDirectoryState();
         if (!isRunning && progressOverall.Value == 0)
         {

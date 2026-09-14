@@ -7,7 +7,7 @@ Remuxing only: no re-encoding, so video and audio are copied bit-for-bit and run
 ## What it does to each file
 
 1. **Inspect** — `mkvmerge -J` the source and parse the JSON track layout.
-2. **Remux** — write a temporary sibling file keeping only the selected languages, dropping the title, global and per-track tags, attachments, and chapters.
+2. **Remux** — write a temporary sibling file keeping only the selected languages, dropping the title, global and per-track tags, attachments, and chapters, and cutting the tail if a trim is set.
 3. **Replace** — move the temp file into place (in-place) or into a destination folder (`--output`).
 4. **Retag** — re-inspect the result with `mkvpropedit`: set forced flags on subtitle tracks that look forced, clear every non-forced track name, and name the forced ones `Forced`.
 
@@ -32,10 +32,27 @@ MediaMkvConverter "D:\Videos" --languages eng,fre,jpn
 
 Any other ISO 639 code works too — the list above is only what the GUI offers as checkboxes. Codes with two ISO 639-2 spellings are interchangeable (`fra`/`fre`, `deu`/`ger`, `zho`/`chi`).
 
-Two rules apply on every run:
+Two rules apply on every language selection:
 
 - **Undetermined (`und`) is always kept.** mkvmerge tags a track carrying no language as undetermined, and dropping those could leave a file with no audio.
 - **A file is left untouched if no audio track matches your selection.** You get an error naming the languages that file actually has, rather than a silently muted result — which matters because in-place mode deletes the original.
+
+## Trimming the end
+
+To drop trailing credits, give `--trim-end` (console) or fill in **Settings → Trim From End** (GUI) with how much to cut:
+
+```powershell
+MediaMkvConverter "D:\Videos\Show" --trim-end 10m
+```
+
+Accepted forms: `10m`, `90s`, `1h30m`, `30 sec`, `00:10:00`, `10:00` (mm:ss), or a bare number, which means minutes. The duration is subtracted from each file's own length, so a folder of differently-sized episodes each lose the same tail.
+
+Two things to know before relying on it:
+
+- **The cut lands on a keyframe, so you keep slightly more than you asked for.** Remuxing copies compressed video untouched, and a cut is only possible where a keyframe starts. mkvmerge moves the point forward to the next one, which typically leaves a few extra seconds. It errs toward keeping content rather than cutting into it. Frame-exact trimming would require re-encoding, which this tool deliberately does not do.
+- **A file shorter than the trim is left alone** and reported as a failure naming its actual length.
+
+The log reports the real result — `Trimmed: 45:00 -> 35:04` — rather than the requested figure, so you can see where the cut actually landed. Run with `--dry-run` first to preview.
 
 > **In-place mode deletes the original before moving the remuxed file into place.** A crash in that window loses the source file. Use `--output` (or `--dry-run` first) if that matters to you.
 
@@ -65,6 +82,7 @@ MediaMkvConverter <rootPath> [options]
   --mkvpropedit <path>   Path to mkvpropedit.exe
   --output <path>        Optional output folder. Converted MKVs go directly there
   --languages <codes>    Audio/subtitle languages to keep. Default: eng
+  --trim-end <duration>  Cut this much off the end, e.g. credits. Default: none
   --skip <fragment>      Path fragment to skip. Default: \Processing\
   --no-subfolders        Process only the input folder itself
   --maintain-structure   Recreate input subfolders under --output
@@ -78,7 +96,7 @@ Any file whose path contains the skip fragment (`\Processing\` by default) is pa
 
 ## GUI
 
-`Media MKV Converter.Gui` is a WinForms shell over the same engine: input and output folder pickers, the tool paths, the skip fragment, the language checkboxes, and toggles for subfolder traversal, folder-structure mirroring, overwrite, and dry-run. Progress lines are colour-coded by event kind.
+`Media MKV Converter.Gui` is a WinForms shell over the same engine: input and output folder pickers, the tool paths, the skip fragment, the language checkboxes, the trim-from-end field, and toggles for subfolder traversal, folder-structure mirroring, overwrite, and dry-run. Progress lines are colour-coded by event kind.
 
 ## Project layout
 
