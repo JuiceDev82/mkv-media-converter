@@ -31,6 +31,13 @@ public sealed class MediaConverterOptions
     /// </summary>
     public TimeSpan TrimFromEnd { get; init; } = TimeSpan.Zero;
 
+    /// <summary>
+    /// Pattern whose first match truncates the output file name, dropping whatever follows it —
+    /// "S01E**" turns "Show.S01E07.1080p.x265-GRP" into "Show.S01E07". Each "*" stands for exactly
+    /// one character. Blank leaves names alone. See <see cref="FileNameTrimmer"/>.
+    /// </summary>
+    public string? TrimNameAfter { get; init; }
+
     public string? OutputPath { get; init; }
 
     public bool OverwriteExisting { get; init; } = true;
@@ -95,9 +102,13 @@ public sealed class MediaConverterEngine
             $"Found {files.Count} supported file(s) under {options.RootPath}{Environment.NewLine}Keeping languages: {string.Join(", ", languages)}" +
             (options.TrimFromEnd > TimeSpan.Zero
                 ? $"{Environment.NewLine}Trimming from end: {DurationParser.Format(options.TrimFromEnd)}"
-                : string.Empty),
+                : string.Empty) +
+            (string.IsNullOrWhiteSpace(options.TrimNameAfter)
+                ? string.Empty
+                : $"{Environment.NewLine}Trimming names after: {options.TrimNameAfter.Trim()}"),
             TotalFiles: files.Count));
 
+        var claimedOutputPaths = new HashSet<string>(StringComparer.OrdinalIgnoreCase);
         var successCount = 0;
         var skipCount = 0;
         var failureCount = 0;
@@ -130,7 +141,7 @@ public sealed class MediaConverterEngine
 
             try
             {
-                await ProcessFileAsync(filePath, sequenceIndex, completedCount, files.Count, totalStopwatch, fileStopwatch, options, languages, progress, cancellationToken);
+                await ProcessFileAsync(filePath, sequenceIndex, completedCount, files.Count, totalStopwatch, fileStopwatch, options, languages, claimedOutputPaths, progress, cancellationToken);
                 successCount++;
                 completedCount++;
             }
@@ -197,6 +208,7 @@ public sealed class MediaConverterEngine
         Stopwatch fileStopwatch,
         MediaConverterOptions options,
         IReadOnlyList<string> languages,
+        HashSet<string> claimedOutputPaths,
         IProgress<MediaConverterProgress>? progress,
         CancellationToken cancellationToken)
     {
@@ -225,6 +237,16 @@ public sealed class MediaConverterEngine
         var trimEndpoint = ResolveTrimEndpoint(originalInfo, options);
         var forcedSubtitlePositions = GetForcedSubtitlePositions(originalInfo, languages);
         var preferredOutputPath = GetPreferredOutputPath(inputPath, options);
+
+        // Trimming names makes collisions easy — two releases of one episode reduce to the same
+        // name — and in-place mode would delete the loser's source after overwriting its output.
+        if (!claimedOutputPaths.Add(preferredOutputPath))
+        {
+            throw new InvalidOperationException(
+                $"Another file in this run already produces \"{Path.GetFileName(preferredOutputPath)}\". " +
+                "Left unchanged so that one is not overwritten.");
+        }
+
         var tempOutputPath = GetTempOutputPath(preferredOutputPath);
 
         if (options.DryRun)
@@ -232,7 +254,7 @@ public sealed class MediaConverterEngine
             ReportStage("dry-run", 2, 2);
             progress?.Report(new MediaConverterProgress(
                 MediaConverterEventKind.FileCompleted,
-                $"        Output: {ResolveOutputPath(preferredOutputPath, options)}{Environment.NewLine}        File runtime: {FormatDuration(fileStopwatch.Elapsed)}{Environment.NewLine}        Forced subtitle positions: {FormatList(forcedSubtitlePositions)}{DescribeTrimPlan(originalInfo, trimEndpoint)}{Environment.NewLine}        Would clear track names after remux",
+                $"        Output: {ResolveOutputPath(preferredOutputPath, options)}{Environment.NewLine}        File runtime: {FormatDuration(fileStopwatch.Elapsed)}{Environment.NewLine}        Forced subtitle positions: {FormatList(forcedSubtitlePositions)}{DescribeTrimPlan(originalInfo, trimEndpoint)}{DescribeRename(inputPath, ResolveOutputPath(preferredOutputPath, options))}{Environment.NewLine}        Would clear track names after remux",
                 inputPath,
                 fileIndex,
                 totalFiles,
@@ -312,7 +334,7 @@ public sealed class MediaConverterEngine
             ReportStage("complete", 8, 8);
             progress?.Report(new MediaConverterProgress(
                 MediaConverterEventKind.FileCompleted,
-                $"        Output: {finalOutputPath}{Environment.NewLine}        File runtime: {FormatDuration(fileStopwatch.Elapsed)}{Environment.NewLine}        Forced subtitle positions: {FormatList(forcedSubtitlePositions)}{DescribeTrimResult(originalInfo, outputInfo, trimEndpoint)}{Environment.NewLine}        Cleared track names: {FormatList(namedTrackPositions.Where(position => !forcedNamedTrackPositions.Contains(position)).ToList())}",
+                $"        Output: {finalOutputPath}{Environment.NewLine}        File runtime: {FormatDuration(fileStopwatch.Elapsed)}{Environment.NewLine}        Forced subtitle positions: {FormatList(forcedSubtitlePositions)}{DescribeTrimResult(originalInfo, outputInfo, trimEndpoint)}{DescribeRename(inputPath, finalOutputPath)}{Environment.NewLine}        Cleared track names: {FormatList(namedTrackPositions.Where(position => !forcedNamedTrackPositions.Contains(position)).ToList())}",
                 inputPath,
                 fileIndex,
                 totalFiles,
@@ -346,14 +368,17 @@ public sealed class MediaConverterEngine
 
     private static string GetPreferredOutputPath(string inputPath, MediaConverterOptions options)
     {
+        var outputFileName =
+            FileNameTrimmer.Trim(Path.GetFileNameWithoutExtension(inputPath), options.TrimNameAfter) + ".mkv";
+
         if (string.IsNullOrWhiteSpace(options.OutputPath))
         {
-            return string.Equals(Path.GetExtension(inputPath), ".mkv", StringComparison.OrdinalIgnoreCase)
-                ? inputPath
-                : Path.ChangeExtension(inputPath, ".mkv");
+            var sourceDirectory = Path.GetDirectoryName(inputPath);
+            return string.IsNullOrEmpty(sourceDirectory)
+                ? outputFileName
+                : Path.Combine(sourceDirectory, outputFileName);
         }
 
-        var outputFileName = Path.ChangeExtension(Path.GetFileName(inputPath), ".mkv");
         return options.MaintainFolderStructure
             ? Path.Combine(options.OutputPath, GetRelativeDirectory(inputPath, options.RootPath), outputFileName)
             : Path.Combine(options.OutputPath, outputFileName);
@@ -643,6 +668,16 @@ public sealed class MediaConverterEngine
         return endpoint;
     }
 
+    private static string DescribeRename(string inputPath, string outputPath)
+    {
+        var before = Path.GetFileName(inputPath);
+        var after = Path.GetFileName(outputPath);
+
+        return string.Equals(before, after, StringComparison.OrdinalIgnoreCase)
+            ? string.Empty
+            : $"{Environment.NewLine}        Renamed: {before} -> {after}";
+    }
+
     /// <summary>Dry-run wording. The endpoint is approximate because mkvmerge snaps it to a keyframe.</summary>
     private static string DescribeTrimPlan(MkvInfo source, TimeSpan? trimEndpoint)
     {
@@ -737,6 +772,12 @@ public sealed class MediaConverterEngine
         if (options.TrimFromEnd < TimeSpan.Zero)
         {
             throw new ArgumentException("Trim from end cannot be negative.");
+        }
+
+        if (!FileNameTrimmer.IsValidPattern(options.TrimNameAfter))
+        {
+            throw new ArgumentException(
+                "The name pattern needs at least one ordinary character; a pattern of only '*' would match every name at its start.");
         }
 
         foreach (var code in options.Languages ?? [])

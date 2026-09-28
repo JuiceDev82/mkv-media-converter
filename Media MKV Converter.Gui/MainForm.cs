@@ -218,6 +218,13 @@ public partial class MainForm : Form
                 $"'{txtTrimEnd.Text.Trim()}' is not a valid duration. Try 10m, 90s, 1h30m or 00:10:00.");
         }
 
+        var trimNameAfter = txtTrimName.Text.Trim();
+        if (!FileNameTrimmer.IsValidPattern(trimNameAfter))
+        {
+            throw new ArgumentException(
+                "The name pattern needs at least one ordinary character; a pattern of only '*' would match every name at its start.");
+        }
+
         var languages = clbLanguages.CheckedItems
             .Cast<LanguageOption>()
             .Select(option => option.Code)
@@ -233,6 +240,7 @@ public partial class MainForm : Form
         {
             Languages = languages,
             TrimFromEnd = trimFromEnd,
+            TrimNameAfter = string.IsNullOrWhiteSpace(trimNameAfter) ? null : trimNameAfter,
             RootPath = Path.GetFullPath(inputFolder),
             OutputPath = string.IsNullOrWhiteSpace(outputFolder) ? null : Path.GetFullPath(outputFolder),
             OverwriteExisting = chkOverwrite.Checked,
@@ -515,6 +523,8 @@ public partial class MainForm : Form
         lblLanguages.Enabled = !isRunning;
         txtTrimEnd.Enabled = !isRunning;
         lblTrimEnd.Enabled = !isRunning;
+        txtTrimName.Enabled = !isRunning;
+        lblTrimName.Enabled = !isRunning;
         UpdateSkipDirectoryState();
         if (!isRunning && progressOverall.Value == 0)
         {

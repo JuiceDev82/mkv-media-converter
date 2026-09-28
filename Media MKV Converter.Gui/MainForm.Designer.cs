@@ -17,6 +17,8 @@ partial class MainForm
     private CheckedListBox clbLanguages;
     private Label lblTrimEnd;
     private TextBox txtTrimEnd;
+    private Label lblTrimName;
+    private TextBox txtTrimName;
     private CheckBox chkDryRun;
     private CheckBox chkTraverseSubfolders;
     private CheckBox chkMaintainFolderStructure;
@@ -80,6 +82,8 @@ partial class MainForm
         clbLanguages = new CheckedListBox();
         lblTrimEnd = new Label();
         txtTrimEnd = new TextBox();
+        lblTrimName = new Label();
+        txtTrimName = new TextBox();
         chkDryRun = new CheckBox();
         chkTraverseSubfolders = new CheckBox();
         chkMaintainFolderStructure = new CheckBox();
@@ -296,7 +300,7 @@ partial class MainForm
         panelAdvanced.Dock = DockStyle.Fill;
         panelAdvanced.Location = new Point(15, 123);
         panelAdvanced.Name = "panelAdvanced";
-        panelAdvanced.Size = new Size(1054, 256);
+        panelAdvanced.Size = new Size(1054, 290);
         panelAdvanced.TabIndex = 11;
         // 
         // layoutAdvanced
@@ -317,18 +321,21 @@ partial class MainForm
         layoutAdvanced.Controls.Add(clbLanguages, 1, 3);
         layoutAdvanced.Controls.Add(lblTrimEnd, 0, 4);
         layoutAdvanced.Controls.Add(txtTrimEnd, 1, 4);
-        layoutAdvanced.Controls.Add(panelAdvancedOptions, 1, 5);
+        layoutAdvanced.Controls.Add(lblTrimName, 0, 5);
+        layoutAdvanced.Controls.Add(txtTrimName, 1, 5);
+        layoutAdvanced.Controls.Add(panelAdvancedOptions, 1, 6);
         layoutAdvanced.Dock = DockStyle.Fill;
         layoutAdvanced.Location = new Point(0, 0);
         layoutAdvanced.Name = "layoutAdvanced";
-        layoutAdvanced.RowCount = 6;
+        layoutAdvanced.RowCount = 7;
         layoutAdvanced.RowStyles.Add(new RowStyle(SizeType.Absolute, 34F));
         layoutAdvanced.RowStyles.Add(new RowStyle(SizeType.Absolute, 34F));
         layoutAdvanced.RowStyles.Add(new RowStyle(SizeType.Absolute, 34F));
         layoutAdvanced.RowStyles.Add(new RowStyle(SizeType.Absolute, 86F));
         layoutAdvanced.RowStyles.Add(new RowStyle(SizeType.Absolute, 34F));
         layoutAdvanced.RowStyles.Add(new RowStyle(SizeType.Absolute, 34F));
-        layoutAdvanced.Size = new Size(1054, 256);
+        layoutAdvanced.RowStyles.Add(new RowStyle(SizeType.Absolute, 34F));
+        layoutAdvanced.Size = new Size(1054, 290);
         layoutAdvanced.TabIndex = 0;
         layoutAdvanced.SetColumnSpan(panelAdvancedOptions, 2);
         layoutAdvanced.SetColumnSpan(clbLanguages, 2);
@@ -343,7 +350,7 @@ partial class MainForm
         panelAdvancedOptions.Location = new Point(118, 105);
         panelAdvancedOptions.Name = "panelAdvancedOptions";
         panelAdvancedOptions.Size = new Size(933, 44);
-        panelAdvancedOptions.TabIndex = 12;
+        panelAdvancedOptions.TabIndex = 14;
         // 
         // lblMkvMerge
         // 
@@ -463,6 +470,25 @@ partial class MainForm
         txtTrimEnd.PlaceholderText = "Optional - cut credits off the end, e.g. 10m, 90s, 1h30m or 00:10:00";
         txtTrimEnd.Size = new Size(833, 23);
         txtTrimEnd.TabIndex = 11;
+        //
+        // lblTrimName
+        //
+        lblTrimName.Anchor = AnchorStyles.Left;
+        lblTrimName.AutoSize = true;
+        lblTrimName.Location = new Point(3, 239);
+        lblTrimName.Name = "lblTrimName";
+        lblTrimName.Size = new Size(84, 15);
+        lblTrimName.TabIndex = 12;
+        lblTrimName.Text = "Trim Name After";
+        //
+        // txtTrimName
+        //
+        txtTrimName.Anchor = AnchorStyles.Left | AnchorStyles.Right;
+        txtTrimName.Location = new Point(118, 235);
+        txtTrimName.Name = "txtTrimName";
+        txtTrimName.PlaceholderText = "Optional - drop the rest of the name after this pattern, * = one character, e.g. S01E**";
+        txtTrimName.Size = new Size(833, 23);
+        txtTrimName.TabIndex = 13;
         //
         // chkOverwrite
         // 
@@ -717,9 +743,9 @@ partial class MainForm
         // 
         AutoScaleDimensions = new SizeF(7F, 15F);
         AutoScaleMode = AutoScaleMode.Font;
-        ClientSize = new Size(1084, 765);
+        ClientSize = new Size(1084, 799);
         Controls.Add(layoutRoot);
-        MinimumSize = new Size(960, 704);
+        MinimumSize = new Size(960, 738);
         Name = "MainForm";
         StartPosition = FormStartPosition.CenterScreen;
         Text = "Media MKV Converter";

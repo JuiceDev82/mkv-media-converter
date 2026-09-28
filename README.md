@@ -8,7 +8,7 @@ Remuxing only: no re-encoding, so video and audio are copied bit-for-bit and run
 
 1. **Inspect** — `mkvmerge -J` the source and parse the JSON track layout.
 2. **Remux** — write a temporary sibling file keeping only the selected languages, dropping the title, global and per-track tags, attachments, and chapters, and cutting the tail if a trim is set.
-3. **Replace** — move the temp file into place (in-place) or into a destination folder (`--output`).
+3. **Replace** — move the temp file into place (in-place) or into a destination folder (`--output`), under a trimmed name if a name pattern is set.
 4. **Retag** — re-inspect the result with `mkvpropedit`: set forced flags on subtitle tracks that look forced, clear every non-forced track name, and name the forced ones `Forced`.
 
 A subtitle track counts as forced when its name contains `forced` or `foreign`, or when its `forced_track` flag is already set.
@@ -54,6 +54,29 @@ Two things to know before relying on it:
 
 The log reports the real result — `Trimmed: 45:00 -> 35:04` — rather than the requested figure, so you can see where the cut actually landed. Run with `--dry-run` first to preview.
 
+## Trimming file names
+
+To strip release tags off the end of names, give `--trim-name` (console) or fill in **Settings → Trim Name After** (GUI) with a pattern. Everything after the first match is dropped and the `.mkv` extension is kept:
+
+```powershell
+MediaMkvConverter "D:\Videos\Show" --trim-name "S01E**"
+```
+
+```
+Lanterns.2026.S01E07.1080p.x265-ELiTE.mkv   ->  Lanterns.2026.S01E07.mkv
+Lanterns.2026.S01E08.2160p.WEB-DL-NTb.mkv   ->  Lanterns.2026.S01E08.mkv
+Movie.2024.1080p.BluRay-GRP.mkv             ->  unchanged, no match
+```
+
+**`*` stands for exactly one character**, not "any number of them" as in a shell glob. `S01E**` matches `S01E` plus two more characters, so it fits `S01E07` but not a three-digit `S01E070` — that would need `S01E***`. Use `S0*E**` to cover any season. Matching ignores case, and a name with no match is left alone, so it is safe to point at a mixed folder.
+
+Two details worth knowing:
+
+- **Leftover separators are tidied.** Cutting mid-name never leaves a trailing `.`, `-`, `_` or space — Windows rejects names ending in a dot anyway.
+- **Files that would collide are refused.** Two releases of one episode both reduce to `Show.S01E07.mkv`; the first is converted and the second is left untouched and reported as a failure, rather than one silently overwriting the other. That matters most in in-place mode, where the loser's source would also be deleted.
+
+`--dry-run` prints every `Renamed: old -> new` without touching anything, which is the quickest way to check a pattern.
+
 > **In-place mode deletes the original before moving the remuxed file into place.** A crash in that window loses the source file. Use `--output` (or `--dry-run` first) if that matters to you.
 
 ## Requirements
@@ -83,6 +106,7 @@ MediaMkvConverter <rootPath> [options]
   --output <path>        Optional output folder. Converted MKVs go directly there
   --languages <codes>    Audio/subtitle languages to keep. Default: eng
   --trim-end <duration>  Cut this much off the end, e.g. credits. Default: none
+  --trim-name <pattern>  Cut the file name short after this pattern. Default: none
   --skip <fragment>      Path fragment to skip. Default: \Processing\
   --no-subfolders        Process only the input folder itself
   --maintain-structure   Recreate input subfolders under --output
@@ -96,7 +120,7 @@ Any file whose path contains the skip fragment (`\Processing\` by default) is pa
 
 ## GUI
 
-`Media MKV Converter.Gui` is a WinForms shell over the same engine: input and output folder pickers, the tool paths, the skip fragment, the language checkboxes, the trim-from-end field, and toggles for subfolder traversal, folder-structure mirroring, overwrite, and dry-run. Progress lines are colour-coded by event kind.
+`Media MKV Converter.Gui` is a WinForms shell over the same engine: input and output folder pickers, the tool paths, the skip fragment, the language checkboxes, the trim-from-end and trim-name fields, and toggles for subfolder traversal, folder-structure mirroring, overwrite, and dry-run. Progress lines are colour-coded by event kind.
 
 ## Project layout
 
