@@ -61,6 +61,7 @@ internal static class ProgramEntry
         var languages = new List<string>();
         var trimFromEnd = TimeSpan.Zero;
         string? trimNameAfter = null;
+        var removeFromName = new List<string>();
         var dryRun = false;
         var traverseSubfolders = true;
         var maintainFolderStructure = false;
@@ -137,6 +138,12 @@ internal static class ProgramEntry
                 continue;
             }
 
+            if (arg.Equals("--remove-from-name", StringComparison.OrdinalIgnoreCase))
+            {
+                removeFromName.AddRange(FileNameStringRemover.ParsePatterns(RequireValue(args, ref index, arg)));
+                continue;
+            }
+
             if (arg.Equals("--skip", StringComparison.OrdinalIgnoreCase))
             {
                 skipFragment = RequireValue(args, ref index, arg);
@@ -181,6 +188,7 @@ internal static class ProgramEntry
             Languages = languages.Count == 0 ? [LanguageCatalog.DefaultCode] : languages,
             TrimFromEnd = trimFromEnd,
             TrimNameAfter = trimNameAfter,
+            RemoveFromName = removeFromName,
             OutputPath = string.IsNullOrWhiteSpace(outputPath) ? null : Path.GetFullPath(outputPath),
             OverwriteExisting = true,
             TraverseSubfolders = traverseSubfolders,
@@ -225,6 +233,7 @@ internal static class ProgramEntry
         Console.WriteLine("  --languages <codes>    Audio/subtitle languages to keep. Default: eng");
         Console.WriteLine("  --trim-end <duration>  Cut this much off the end, e.g. credits. Default: none");
         Console.WriteLine("  --trim-name <pattern>  Cut the file name short after this pattern. Default: none");
+        Console.WriteLine("  --remove-from-name <s> Comma-separated text to delete from the file name. Default: none");
         Console.WriteLine("  --skip <fragment>      Path fragment to skip. Default: \\Processing\\");
         Console.WriteLine("  --no-subfolders        Process only the input folder itself");
         Console.WriteLine("  --maintain-structure   Recreate input subfolders under --output");
@@ -256,6 +265,12 @@ internal static class ProgramEntry
         Console.WriteLine();
         Console.WriteLine("    --trim-name \"S01E**\"");
         Console.WriteLine("    Lanterns.2026.S01E07.1080p.x265-ELiTE.mkv  ->  Lanterns.2026.S01E07.mkv");
+        Console.WriteLine();
+        Console.WriteLine("  --remove-from-name deletes each comma-separated string wherever it occurs (case");
+        Console.WriteLine("  insensitive) and tidies up the leftover dots/dashes. Runs after --trim-name.");
+        Console.WriteLine();
+        Console.WriteLine("    --trim-name \"S01E**\" --remove-from-name \"REPACK,PROPER\"");
+        Console.WriteLine("    Show.PROPER.S01E07.1080p.x265-ELiTE.mkv  ->  Show.S01E07.mkv");
         Console.WriteLine();
         Console.WriteLine("Example:");
         Console.WriteLine(@"  MediaMkvConverter ""D:\Videos\Movies"" --output ""E:\Converted"" --languages eng,fre");

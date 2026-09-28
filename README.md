@@ -77,6 +77,21 @@ Two details worth knowing:
 
 `--dry-run` prints every `Renamed: old -> new` without touching anything, which is the quickest way to check a pattern.
 
+### Removing text from anywhere in the name
+
+`--trim-name` only cuts a suffix. To delete specific text wherever it appears — including in the middle of the part you're keeping — give `--remove-from-name` (console) or **Settings → Remove From Name** (GUI) a comma-separated list. Each entry is deleted everywhere it occurs, case-insensitively, and runs *after* `--trim-name`:
+
+```powershell
+MediaMkvConverter "D:\Videos\Show" --trim-name "S01E**" --remove-from-name "PROPER,REPACK"
+```
+
+```
+Show.PROPER.S01E07.1080p.x265-ELiTE.mkv   ->  Show.S01E07.mkv
+Show Title - S01E08.mkv                   ->  unchanged, nothing matched
+```
+
+Whatever dots, dashes or spaces the removal leaves stranded next to each other are collapsed to one, and trimmed from both ends — but only on a name a removal actually touched. A file where nothing matched is left **byte-for-byte** untouched, so an existing `" - "` or similar in your naming style is never disturbed by files that had no reason to change. As with trim-name, a removal that would empty the name is refused in favor of the original, and the same collision guard applies — two names that reduce to the same result leave the second file's source alone and reported as a failure.
+
 > **In-place mode deletes the original before moving the remuxed file into place.** A crash in that window loses the source file. Use `--output` (or `--dry-run` first) if that matters to you.
 
 ## Requirements
@@ -107,6 +122,7 @@ MediaMkvConverter <rootPath> [options]
   --languages <codes>    Audio/subtitle languages to keep. Default: eng
   --trim-end <duration>  Cut this much off the end, e.g. credits. Default: none
   --trim-name <pattern>  Cut the file name short after this pattern. Default: none
+  --remove-from-name <s> Comma-separated text to delete from the file name. Default: none
   --skip <fragment>      Path fragment to skip. Default: \Processing\
   --no-subfolders        Process only the input folder itself
   --maintain-structure   Recreate input subfolders under --output
@@ -120,7 +136,7 @@ Any file whose path contains the skip fragment (`\Processing\` by default) is pa
 
 ## GUI
 
-`Media MKV Converter.Gui` is a WinForms shell over the same engine: input and output folder pickers, the tool paths, the skip fragment, the language checkboxes, the trim-from-end and trim-name fields, and toggles for subfolder traversal, folder-structure mirroring, overwrite, and dry-run. Progress lines are colour-coded by event kind.
+`Media MKV Converter.Gui` is a WinForms shell over the same engine: input and output folder pickers, the tool paths, the skip fragment, the language checkboxes, the trim-from-end, trim-name and remove-from-name fields, and toggles for subfolder traversal, folder-structure mirroring, overwrite, and dry-run. Progress lines are colour-coded by event kind.
 
 ## Project layout
 

@@ -10,6 +10,10 @@ partial class MainForm
     private Label lblOutputFolder;
     private TextBox txtOutputFolder;
     private Button btnBrowseOutput;
+    private GroupBox grpFilePreview;
+    private TableLayoutPanel layoutFilePreview;
+    private Label lblFilePreviewSummary;
+    private ListBox lstFilePreview;
     private CheckBox chkOverwrite;
     private Label lblSkip;
     private TextBox txtSkip;
@@ -19,6 +23,8 @@ partial class MainForm
     private TextBox txtTrimEnd;
     private Label lblTrimName;
     private TextBox txtTrimName;
+    private Label lblRemoveFromName;
+    private TextBox txtRemoveFromName;
     private CheckBox chkDryRun;
     private CheckBox chkTraverseSubfolders;
     private CheckBox chkMaintainFolderStructure;
@@ -75,6 +81,10 @@ partial class MainForm
         lblOutputFolder = new Label();
         txtOutputFolder = new TextBox();
         btnBrowseOutput = new Button();
+        grpFilePreview = new GroupBox();
+        layoutFilePreview = new TableLayoutPanel();
+        lblFilePreviewSummary = new Label();
+        lstFilePreview = new ListBox();
         chkOverwrite = new CheckBox();
         lblSkip = new Label();
         txtSkip = new TextBox();
@@ -84,6 +94,8 @@ partial class MainForm
         txtTrimEnd = new TextBox();
         lblTrimName = new Label();
         txtTrimName = new TextBox();
+        lblRemoveFromName = new Label();
+        txtRemoveFromName = new TextBox();
         chkDryRun = new CheckBox();
         chkTraverseSubfolders = new CheckBox();
         chkMaintainFolderStructure = new CheckBox();
@@ -120,6 +132,8 @@ partial class MainForm
         lblResultsRuntimeValue = new Label();
         lstLog = new ListBox();
         layoutRoot.SuspendLayout();
+        grpFilePreview.SuspendLayout();
+        layoutFilePreview.SuspendLayout();
         panelTopActions.SuspendLayout();
         panelAdvanced.SuspendLayout();
         layoutAdvanced.SuspendLayout();
@@ -139,21 +153,23 @@ partial class MainForm
         layoutRoot.Controls.Add(lblOutputFolder, 0, 1);
         layoutRoot.Controls.Add(txtOutputFolder, 1, 1);
         layoutRoot.Controls.Add(btnBrowseOutput, 2, 1);
-        layoutRoot.Controls.Add(panelTopActions, 0, 2);
-        layoutRoot.Controls.Add(panelAdvanced, 0, 3);
-        layoutRoot.Controls.Add(lblSummary, 0, 4);
-        layoutRoot.Controls.Add(progressOverall, 0, 5);
-        layoutRoot.Controls.Add(lblProgressPercent, 2, 5);
-        layoutRoot.Controls.Add(lblCurrent, 0, 6);
-        layoutRoot.Controls.Add(grpResults, 0, 7);
-        layoutRoot.Controls.Add(lstLog, 0, 8);
+        layoutRoot.Controls.Add(grpFilePreview, 0, 2);
+        layoutRoot.Controls.Add(panelTopActions, 0, 3);
+        layoutRoot.Controls.Add(panelAdvanced, 0, 4);
+        layoutRoot.Controls.Add(lblSummary, 0, 5);
+        layoutRoot.Controls.Add(progressOverall, 0, 6);
+        layoutRoot.Controls.Add(lblProgressPercent, 2, 6);
+        layoutRoot.Controls.Add(lblCurrent, 0, 7);
+        layoutRoot.Controls.Add(grpResults, 0, 8);
+        layoutRoot.Controls.Add(lstLog, 0, 9);
         layoutRoot.Dock = DockStyle.Fill;
         layoutRoot.Location = new Point(0, 0);
         layoutRoot.Name = "layoutRoot";
         layoutRoot.Padding = new Padding(12);
-        layoutRoot.RowCount = 9;
+        layoutRoot.RowCount = 10;
         layoutRoot.RowStyles.Add(new RowStyle(SizeType.Absolute, 34F));
         layoutRoot.RowStyles.Add(new RowStyle(SizeType.Absolute, 34F));
+        layoutRoot.RowStyles.Add(new RowStyle(SizeType.Absolute, 120F));
         layoutRoot.RowStyles.Add(new RowStyle(SizeType.Absolute, 40F));
         layoutRoot.RowStyles.Add(new RowStyle(SizeType.AutoSize));
         layoutRoot.RowStyles.Add(new RowStyle(SizeType.Absolute, 28F));
@@ -163,6 +179,7 @@ partial class MainForm
         layoutRoot.RowStyles.Add(new RowStyle(SizeType.Percent, 100F));
         layoutRoot.Size = new Size(1084, 661);
         layoutRoot.TabIndex = 0;
+        layoutRoot.SetColumnSpan(grpFilePreview, 3);
         layoutRoot.SetColumnSpan(panelTopActions, 3);
         layoutRoot.SetColumnSpan(panelAdvanced, 3);
         layoutRoot.SetColumnSpan(lblSummary, 3);
@@ -188,7 +205,8 @@ partial class MainForm
         txtInputFolder.Name = "txtInputFolder";
         txtInputFolder.Size = new Size(839, 23);
         txtInputFolder.TabIndex = 1;
-        // 
+        txtInputFolder.TextChanged += txtInputFolder_TextChanged;
+        //
         // btnBrowseInput
         // 
         btnBrowseInput.Anchor = AnchorStyles.Left | AnchorStyles.Right;
@@ -229,7 +247,56 @@ partial class MainForm
         btnBrowseOutput.Text = "Browse...";
         btnBrowseOutput.UseVisualStyleBackColor = true;
         btnBrowseOutput.Click += btnBrowseOutput_Click;
-        // 
+        //
+        // grpFilePreview
+        //
+        grpFilePreview.Controls.Add(layoutFilePreview);
+        grpFilePreview.Dock = DockStyle.Fill;
+        grpFilePreview.Location = new Point(15, 83);
+        grpFilePreview.Name = "grpFilePreview";
+        grpFilePreview.Size = new Size(1054, 120);
+        grpFilePreview.TabIndex = 6;
+        grpFilePreview.TabStop = false;
+        grpFilePreview.Text = "Files To Process";
+        //
+        // layoutFilePreview
+        //
+        layoutFilePreview.ColumnCount = 1;
+        layoutFilePreview.ColumnStyles.Add(new ColumnStyle(SizeType.Percent, 100F));
+        layoutFilePreview.Controls.Add(lblFilePreviewSummary, 0, 0);
+        layoutFilePreview.Controls.Add(lstFilePreview, 0, 1);
+        layoutFilePreview.Dock = DockStyle.Fill;
+        layoutFilePreview.Location = new Point(3, 19);
+        layoutFilePreview.Name = "layoutFilePreview";
+        layoutFilePreview.RowCount = 2;
+        layoutFilePreview.RowStyles.Add(new RowStyle(SizeType.Absolute, 20F));
+        layoutFilePreview.RowStyles.Add(new RowStyle(SizeType.Percent, 100F));
+        layoutFilePreview.Size = new Size(1048, 98);
+        layoutFilePreview.TabIndex = 0;
+        //
+        // lblFilePreviewSummary
+        //
+        lblFilePreviewSummary.Anchor = AnchorStyles.Left;
+        lblFilePreviewSummary.AutoEllipsis = true;
+        lblFilePreviewSummary.Dock = DockStyle.Fill;
+        lblFilePreviewSummary.Location = new Point(3, 0);
+        lblFilePreviewSummary.Name = "lblFilePreviewSummary";
+        lblFilePreviewSummary.Size = new Size(1042, 20);
+        lblFilePreviewSummary.TabIndex = 0;
+        lblFilePreviewSummary.Text = "Choose an input folder to preview its files.";
+        lblFilePreviewSummary.TextAlign = ContentAlignment.MiddleLeft;
+        //
+        // lstFilePreview
+        //
+        lstFilePreview.Dock = DockStyle.Fill;
+        lstFilePreview.FormattingEnabled = true;
+        lstFilePreview.HorizontalScrollbar = true;
+        lstFilePreview.IntegralHeight = false;
+        lstFilePreview.Location = new Point(3, 23);
+        lstFilePreview.Name = "lstFilePreview";
+        lstFilePreview.Size = new Size(1042, 75);
+        lstFilePreview.TabIndex = 1;
+        //
         // panelTopActions
         // 
         panelTopActions.Controls.Add(btnStart);
@@ -300,7 +367,7 @@ partial class MainForm
         panelAdvanced.Dock = DockStyle.Fill;
         panelAdvanced.Location = new Point(15, 123);
         panelAdvanced.Name = "panelAdvanced";
-        panelAdvanced.Size = new Size(1054, 290);
+        panelAdvanced.Size = new Size(1054, 324);
         panelAdvanced.TabIndex = 11;
         // 
         // layoutAdvanced
@@ -323,11 +390,13 @@ partial class MainForm
         layoutAdvanced.Controls.Add(txtTrimEnd, 1, 4);
         layoutAdvanced.Controls.Add(lblTrimName, 0, 5);
         layoutAdvanced.Controls.Add(txtTrimName, 1, 5);
-        layoutAdvanced.Controls.Add(panelAdvancedOptions, 1, 6);
+        layoutAdvanced.Controls.Add(lblRemoveFromName, 0, 6);
+        layoutAdvanced.Controls.Add(txtRemoveFromName, 1, 6);
+        layoutAdvanced.Controls.Add(panelAdvancedOptions, 1, 7);
         layoutAdvanced.Dock = DockStyle.Fill;
         layoutAdvanced.Location = new Point(0, 0);
         layoutAdvanced.Name = "layoutAdvanced";
-        layoutAdvanced.RowCount = 7;
+        layoutAdvanced.RowCount = 8;
         layoutAdvanced.RowStyles.Add(new RowStyle(SizeType.Absolute, 34F));
         layoutAdvanced.RowStyles.Add(new RowStyle(SizeType.Absolute, 34F));
         layoutAdvanced.RowStyles.Add(new RowStyle(SizeType.Absolute, 34F));
@@ -335,7 +404,8 @@ partial class MainForm
         layoutAdvanced.RowStyles.Add(new RowStyle(SizeType.Absolute, 34F));
         layoutAdvanced.RowStyles.Add(new RowStyle(SizeType.Absolute, 34F));
         layoutAdvanced.RowStyles.Add(new RowStyle(SizeType.Absolute, 34F));
-        layoutAdvanced.Size = new Size(1054, 290);
+        layoutAdvanced.RowStyles.Add(new RowStyle(SizeType.Absolute, 34F));
+        layoutAdvanced.Size = new Size(1054, 324);
         layoutAdvanced.TabIndex = 0;
         layoutAdvanced.SetColumnSpan(panelAdvancedOptions, 2);
         layoutAdvanced.SetColumnSpan(clbLanguages, 2);
@@ -350,7 +420,7 @@ partial class MainForm
         panelAdvancedOptions.Location = new Point(118, 105);
         panelAdvancedOptions.Name = "panelAdvancedOptions";
         panelAdvancedOptions.Size = new Size(933, 44);
-        panelAdvancedOptions.TabIndex = 14;
+        panelAdvancedOptions.TabIndex = 16;
         // 
         // lblMkvMerge
         // 
@@ -427,6 +497,7 @@ partial class MainForm
         txtSkip.Name = "txtSkip";
         txtSkip.Size = new Size(833, 23);
         txtSkip.TabIndex = 7;
+        txtSkip.TextChanged += txtSkip_TextChanged;
         //
         // lblLanguages
         //
@@ -489,6 +560,25 @@ partial class MainForm
         txtTrimName.PlaceholderText = "Optional - drop the rest of the name after this pattern, * = one character, e.g. S01E**";
         txtTrimName.Size = new Size(833, 23);
         txtTrimName.TabIndex = 13;
+        //
+        // lblRemoveFromName
+        //
+        lblRemoveFromName.Anchor = AnchorStyles.Left;
+        lblRemoveFromName.AutoSize = true;
+        lblRemoveFromName.Location = new Point(3, 273);
+        lblRemoveFromName.Name = "lblRemoveFromName";
+        lblRemoveFromName.Size = new Size(104, 15);
+        lblRemoveFromName.TabIndex = 14;
+        lblRemoveFromName.Text = "Remove From Name";
+        //
+        // txtRemoveFromName
+        //
+        txtRemoveFromName.Anchor = AnchorStyles.Left | AnchorStyles.Right;
+        txtRemoveFromName.Location = new Point(118, 269);
+        txtRemoveFromName.Name = "txtRemoveFromName";
+        txtRemoveFromName.PlaceholderText = "Optional - comma-separated text to delete wherever it appears, e.g. REPACK,PROPER";
+        txtRemoveFromName.Size = new Size(833, 23);
+        txtRemoveFromName.TabIndex = 15;
         //
         // chkOverwrite
         // 
@@ -743,14 +833,16 @@ partial class MainForm
         // 
         AutoScaleDimensions = new SizeF(7F, 15F);
         AutoScaleMode = AutoScaleMode.Font;
-        ClientSize = new Size(1084, 799);
+        ClientSize = new Size(1084, 953);
         Controls.Add(layoutRoot);
-        MinimumSize = new Size(960, 738);
+        MinimumSize = new Size(960, 892);
         Name = "MainForm";
         StartPosition = FormStartPosition.CenterScreen;
         Text = "Media MKV Converter";
         layoutRoot.ResumeLayout(false);
         layoutRoot.PerformLayout();
+        grpFilePreview.ResumeLayout(false);
+        layoutFilePreview.ResumeLayout(false);
         panelTopActions.ResumeLayout(false);
         panelTopActions.PerformLayout();
         panelAdvanced.ResumeLayout(false);

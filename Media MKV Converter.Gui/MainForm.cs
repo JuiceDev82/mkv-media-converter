@@ -15,9 +15,18 @@ public partial class MainForm : Form
     private int _skipCount;
     private int _failureCount;
 
+    private readonly System.Windows.Forms.Timer _filePreviewDebounceTimer;
+    private int _filePreviewRequestVersion;
+
     public MainForm()
     {
         InitializeComponent();
+
+        // Created first: setting the fields below fires TextChanged handlers that touch this timer.
+        _filePreviewDebounceTimer = new System.Windows.Forms.Timer { Interval = 400 };
+        _filePreviewDebounceTimer.Tick += FilePreviewDebounceTimer_Tick;
+        FormClosed += (_, _) => _filePreviewDebounceTimer.Dispose();
+
         txtInputFolder.Text = Environment.CurrentDirectory.TrimEnd(Path.DirectorySeparatorChar, Path.AltDirectorySeparatorChar);
         txtMkvMerge.Text = new MediaConverterOptions().MkvMergePath;
         txtMkvPropEdit.Text = new MediaConverterOptions().MkvPropEditPath;
@@ -31,6 +40,10 @@ public partial class MainForm : Form
         UpdateSkipDirectoryState();
         ApplyResultsSummaryColors();
         UpdateLogItemHeight();
+
+        // Show the initial folder's files right away rather than waiting out the debounce.
+        _filePreviewDebounceTimer.Stop();
+        _ = RefreshFilePreviewAsync();
     }
 
     private async void btnStart_Click(object? sender, EventArgs e)
@@ -84,6 +97,9 @@ public partial class MainForm : Form
             _runCancellation.Dispose();
             _runCancellation = null;
             UpdateRunningState(false);
+
+            // A run can rename or delete files in the input folder, so the preview needs a re-scan.
+            _ = RefreshFilePreviewAsync();
         }
     }
 
@@ -165,6 +181,23 @@ public partial class MainForm : Form
     private void chkTraverseSubfolders_CheckedChanged(object? sender, EventArgs e)
     {
         UpdateSkipDirectoryState();
+        RestartFilePreviewDebounce();
+    }
+
+    private void txtInputFolder_TextChanged(object? sender, EventArgs e)
+    {
+        RestartFilePreviewDebounce();
+    }
+
+    private void txtSkip_TextChanged(object? sender, EventArgs e)
+    {
+        RestartFilePreviewDebounce();
+    }
+
+    private void FilePreviewDebounceTimer_Tick(object? sender, EventArgs e)
+    {
+        _filePreviewDebounceTimer.Stop();
+        _ = RefreshFilePreviewAsync();
     }
 
     private void lstLog_DoubleClick(object? sender, EventArgs e)
@@ -173,6 +206,102 @@ public partial class MainForm : Form
         {
             Clipboard.SetText(selectedEntry.Text);
             lblCurrent.Text = "Copied selected log line to clipboard.";
+        }
+    }
+
+    private void RestartFilePreviewDebounce()
+    {
+        _filePreviewDebounceTimer.Stop();
+        _filePreviewDebounceTimer.Start();
+    }
+
+    /// <summary>
+    /// Re-scans the input folder and repopulates the preview list. Runs the scan on a background
+    /// thread so a large or slow (e.g. network) folder does not freeze the UI, and guards against
+    /// out-of-order results: if the folder or a setting changes again before this scan finishes, a
+    /// newer call's higher <see cref="_filePreviewRequestVersion"/> makes this one's result a no-op.
+    /// </summary>
+    private async Task RefreshFilePreviewAsync()
+    {
+        var requestVersion = ++_filePreviewRequestVersion;
+        var inputFolder = txtInputFolder.Text.Trim();
+
+        lstFilePreview.Items.Clear();
+
+        if (string.IsNullOrWhiteSpace(inputFolder))
+        {
+            lblFilePreviewSummary.Text = "Choose an input folder to preview its files.";
+            return;
+        }
+
+        string rootPath;
+        try
+        {
+            rootPath = Path.GetFullPath(inputFolder);
+        }
+        catch (Exception ex) when (ex is ArgumentException or NotSupportedException or PathTooLongException)
+        {
+            lblFilePreviewSummary.Text = $"Invalid folder path: {ex.Message}";
+            return;
+        }
+
+        if (!Directory.Exists(rootPath))
+        {
+            lblFilePreviewSummary.Text = "Folder does not exist.";
+            return;
+        }
+
+        var previewOptions = new MediaConverterOptions
+        {
+            RootPath = rootPath,
+            TraverseSubfolders = chkTraverseSubfolders.Checked,
+            SkipFragment = string.IsNullOrWhiteSpace(txtSkip.Text) ? @"\Processing\" : txtSkip.Text.Trim(),
+        };
+
+        lblFilePreviewSummary.Text = "Scanning...";
+
+        IReadOnlyList<FilePreviewEntry> entries;
+        try
+        {
+            entries = await Task.Run(() => new MediaConverterEngine().PreviewFiles(previewOptions));
+        }
+        catch (Exception ex)
+        {
+            if (requestVersion == _filePreviewRequestVersion)
+            {
+                lblFilePreviewSummary.Text = $"Could not list files: {ex.Message}";
+            }
+
+            return;
+        }
+
+        if (requestVersion != _filePreviewRequestVersion)
+        {
+            // Superseded by a newer scan (folder or a setting changed again); let that one win.
+            return;
+        }
+
+        lstFilePreview.BeginUpdate();
+        foreach (var entry in entries)
+        {
+            var relativePath = Path.GetRelativePath(rootPath, entry.FullPath);
+            lstFilePreview.Items.Add(entry.WillBeSkipped ? $"{relativePath}  (skip)" : relativePath);
+        }
+
+        lstFilePreview.EndUpdate();
+
+        var skippedCount = entries.Count(entry => entry.WillBeSkipped);
+        if (entries.Count == 0)
+        {
+            lblFilePreviewSummary.Text = $"No supported files found under {rootPath}.";
+        }
+        else if (skippedCount == 0)
+        {
+            lblFilePreviewSummary.Text = $"{entries.Count} file(s) found.";
+        }
+        else
+        {
+            lblFilePreviewSummary.Text = $"{entries.Count} file(s) found, {skippedCount} will be skipped.";
         }
     }
 
@@ -225,6 +354,8 @@ public partial class MainForm : Form
                 "The name pattern needs at least one ordinary character; a pattern of only '*' would match every name at its start.");
         }
 
+        var removeFromName = FileNameStringRemover.ParsePatterns(txtRemoveFromName.Text);
+
         var languages = clbLanguages.CheckedItems
             .Cast<LanguageOption>()
             .Select(option => option.Code)
@@ -241,6 +372,7 @@ public partial class MainForm : Form
             Languages = languages,
             TrimFromEnd = trimFromEnd,
             TrimNameAfter = string.IsNullOrWhiteSpace(trimNameAfter) ? null : trimNameAfter,
+            RemoveFromName = removeFromName,
             RootPath = Path.GetFullPath(inputFolder),
             OutputPath = string.IsNullOrWhiteSpace(outputFolder) ? null : Path.GetFullPath(outputFolder),
             OverwriteExisting = chkOverwrite.Checked,
@@ -525,6 +657,8 @@ public partial class MainForm : Form
         lblTrimEnd.Enabled = !isRunning;
         txtTrimName.Enabled = !isRunning;
         lblTrimName.Enabled = !isRunning;
+        txtRemoveFromName.Enabled = !isRunning;
+        lblRemoveFromName.Enabled = !isRunning;
         UpdateSkipDirectoryState();
         if (!isRunning && progressOverall.Value == 0)
         {

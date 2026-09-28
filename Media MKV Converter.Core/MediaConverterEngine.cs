@@ -38,6 +38,13 @@ public sealed class MediaConverterOptions
     /// </summary>
     public string? TrimNameAfter { get; init; }
 
+    /// <summary>
+    /// Literal substrings to delete from the output file name — "1080p, x265, ELiTE" strips each of
+    /// those wherever they occur and tidies the separator debris left behind. Applied after
+    /// <see cref="TrimNameAfter"/>. Empty removes nothing. See <see cref="FileNameStringRemover"/>.
+    /// </summary>
+    public IReadOnlyList<string> RemoveFromName { get; init; } = [];
+
     public string? OutputPath { get; init; }
 
     public bool OverwriteExisting { get; init; } = true;
@@ -79,6 +86,9 @@ public sealed record MediaConverterRunSummary(
     int FailureCount,
     TimeSpan Runtime);
 
+/// <summary>One file <see cref="MediaConverterEngine.PreviewFiles"/> found under the input folder.</summary>
+public sealed record FilePreviewEntry(string FullPath, bool WillBeSkipped);
+
 public sealed class MediaConverterEngine
 {
     private static readonly string[] SupportedExtensions = [".mkv", ".mp4", ".avi"];
@@ -105,7 +115,10 @@ public sealed class MediaConverterEngine
                 : string.Empty) +
             (string.IsNullOrWhiteSpace(options.TrimNameAfter)
                 ? string.Empty
-                : $"{Environment.NewLine}Trimming names after: {options.TrimNameAfter.Trim()}"),
+                : $"{Environment.NewLine}Trimming names after: {options.TrimNameAfter.Trim()}") +
+            (options.RemoveFromName.Count == 0
+                ? string.Empty
+                : $"{Environment.NewLine}Removing from names: {string.Join(", ", options.RemoveFromName)}"),
             TotalFiles: files.Count));
 
         var claimedOutputPaths = new HashSet<string>(StringComparer.OrdinalIgnoreCase);
@@ -181,6 +194,26 @@ public sealed class MediaConverterEngine
             Summary: summary));
 
         return summary;
+    }
+
+    /// <summary>
+    /// Lists the files a run would find under <see cref="MediaConverterOptions.RootPath"/>, without
+    /// touching anything. Reuses <see cref="RunAsync"/>'s own enumeration and skip check, so this
+    /// stays accurate as that logic changes — a GUI preview built by re-implementing the rule
+    /// separately would quietly drift from it. Returns an empty list rather than throwing when the
+    /// root path is blank or does not exist yet, since callers typically use this while a folder
+    /// path is still being typed or browsed.
+    /// </summary>
+    public IReadOnlyList<FilePreviewEntry> PreviewFiles(MediaConverterOptions options)
+    {
+        if (string.IsNullOrWhiteSpace(options.RootPath) || !Directory.Exists(options.RootPath))
+        {
+            return [];
+        }
+
+        return EnumerateInputFiles(options)
+            .Select(path => new FilePreviewEntry(path, ShouldSkip(path, options)))
+            .ToList();
     }
 
     private IEnumerable<string> EnumerateInputFiles(MediaConverterOptions options)
@@ -368,8 +401,8 @@ public sealed class MediaConverterEngine
 
     private static string GetPreferredOutputPath(string inputPath, MediaConverterOptions options)
     {
-        var outputFileName =
-            FileNameTrimmer.Trim(Path.GetFileNameWithoutExtension(inputPath), options.TrimNameAfter) + ".mkv";
+        var trimmedName = FileNameTrimmer.Trim(Path.GetFileNameWithoutExtension(inputPath), options.TrimNameAfter);
+        var outputFileName = FileNameStringRemover.Remove(trimmedName, options.RemoveFromName) + ".mkv";
 
         if (string.IsNullOrWhiteSpace(options.OutputPath))
         {
