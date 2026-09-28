@@ -13,6 +13,7 @@ partial class MainForm
     private GroupBox grpFilePreview;
     private TableLayoutPanel layoutFilePreview;
     private Label lblFilePreviewSummary;
+    private Button btnRefreshFilePreview;
     private ListBox lstFilePreview;
     private CheckBox chkOverwrite;
     private Label lblSkip;
@@ -84,6 +85,7 @@ partial class MainForm
         grpFilePreview = new GroupBox();
         layoutFilePreview = new TableLayoutPanel();
         lblFilePreviewSummary = new Label();
+        btnRefreshFilePreview = new Button();
         lstFilePreview = new ListBox();
         chkOverwrite = new CheckBox();
         lblSkip = new Label();
@@ -261,9 +263,11 @@ partial class MainForm
         //
         // layoutFilePreview
         //
-        layoutFilePreview.ColumnCount = 1;
+        layoutFilePreview.ColumnCount = 2;
         layoutFilePreview.ColumnStyles.Add(new ColumnStyle(SizeType.Percent, 100F));
+        layoutFilePreview.ColumnStyles.Add(new ColumnStyle(SizeType.Absolute, 80F));
         layoutFilePreview.Controls.Add(lblFilePreviewSummary, 0, 0);
+        layoutFilePreview.Controls.Add(btnRefreshFilePreview, 1, 0);
         layoutFilePreview.Controls.Add(lstFilePreview, 0, 1);
         layoutFilePreview.Dock = DockStyle.Fill;
         layoutFilePreview.Location = new Point(3, 19);
@@ -273,6 +277,7 @@ partial class MainForm
         layoutFilePreview.RowStyles.Add(new RowStyle(SizeType.Percent, 100F));
         layoutFilePreview.Size = new Size(1048, 98);
         layoutFilePreview.TabIndex = 0;
+        layoutFilePreview.SetColumnSpan(lstFilePreview, 2);
         //
         // lblFilePreviewSummary
         //
@@ -281,10 +286,22 @@ partial class MainForm
         lblFilePreviewSummary.Dock = DockStyle.Fill;
         lblFilePreviewSummary.Location = new Point(3, 0);
         lblFilePreviewSummary.Name = "lblFilePreviewSummary";
-        lblFilePreviewSummary.Size = new Size(1042, 20);
+        lblFilePreviewSummary.Size = new Size(962, 20);
         lblFilePreviewSummary.TabIndex = 0;
         lblFilePreviewSummary.Text = "Choose an input folder to preview its files.";
         lblFilePreviewSummary.TextAlign = ContentAlignment.MiddleLeft;
+        //
+        // btnRefreshFilePreview
+        //
+        btnRefreshFilePreview.Anchor = AnchorStyles.Right;
+        btnRefreshFilePreview.Location = new Point(968, 0);
+        btnRefreshFilePreview.Margin = new Padding(0);
+        btnRefreshFilePreview.Name = "btnRefreshFilePreview";
+        btnRefreshFilePreview.Size = new Size(80, 20);
+        btnRefreshFilePreview.TabIndex = 2;
+        btnRefreshFilePreview.Text = "Refresh";
+        btnRefreshFilePreview.UseVisualStyleBackColor = true;
+        btnRefreshFilePreview.Click += btnRefreshFilePreview_Click;
         //
         // lstFilePreview
         //

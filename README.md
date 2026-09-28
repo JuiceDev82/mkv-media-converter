@@ -138,6 +138,10 @@ Any file whose path contains the skip fragment (`\Processing\` by default) is pa
 
 `Media MKV Converter.Gui` is a WinForms shell over the same engine: input and output folder pickers, the tool paths, the skip fragment, the language checkboxes, the trim-from-end, trim-name and remove-from-name fields, and toggles for subfolder traversal, folder-structure mirroring, overwrite, and dry-run. Progress lines are colour-coded by event kind.
 
+`AppIcon.ico` (a generated play-badge icon) is embedded into the exe via `<ApplicationIcon>` and re-applied to the running window at startup — see `MainForm.ApplyApplicationIcon`. To use your own icon instead, replace the file and keep the name, or update `<ApplicationIcon>` in the `.csproj` to point at a different one.
+
+The **Files To Process** panel watches the input folder live: add, remove, or rename a file there while the app is open (with a file manager, another program, anything) and the list updates on its own within about half a second, no need to reopen or re-browse the folder. A **Refresh** button next to it forces an immediate re-scan, which also covers the rare case where watching itself fails — some network or virtual drives don't support it, and it's silently disabled rather than treated as an error. Watching is paused for the duration of a run, since a conversion is itself creating, renaming and deleting files in that same folder.
+
 ## Project layout
 
 | Project | Target | Role |

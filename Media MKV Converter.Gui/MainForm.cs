@@ -16,16 +16,32 @@ public partial class MainForm : Form
     private int _failureCount;
 
     private readonly System.Windows.Forms.Timer _filePreviewDebounceTimer;
+    private readonly FileSystemWatcher _filePreviewWatcher;
     private int _filePreviewRequestVersion;
 
     public MainForm()
     {
         InitializeComponent();
+        ApplyApplicationIcon();
 
         // Created first: setting the fields below fires TextChanged handlers that touch this timer.
         _filePreviewDebounceTimer = new System.Windows.Forms.Timer { Interval = 400 };
         _filePreviewDebounceTimer.Tick += FilePreviewDebounceTimer_Tick;
         FormClosed += (_, _) => _filePreviewDebounceTimer.Dispose();
+
+        // Not watching anything until the first successful scan points it at a real folder.
+        // SynchronizingObject makes WinForms marshal every event below onto the UI thread for us,
+        // so the handlers can touch _filePreviewDebounceTimer directly.
+        _filePreviewWatcher = new FileSystemWatcher
+        {
+            NotifyFilter = NotifyFilters.FileName | NotifyFilters.DirectoryName,
+            SynchronizingObject = this,
+        };
+        _filePreviewWatcher.Created += (_, _) => RestartFilePreviewDebounce();
+        _filePreviewWatcher.Deleted += (_, _) => RestartFilePreviewDebounce();
+        _filePreviewWatcher.Renamed += (_, _) => RestartFilePreviewDebounce();
+        _filePreviewWatcher.Error += (_, _) => RestartFilePreviewDebounce();
+        FormClosed += (_, _) => _filePreviewWatcher.Dispose();
 
         txtInputFolder.Text = Environment.CurrentDirectory.TrimEnd(Path.DirectorySeparatorChar, Path.AltDirectorySeparatorChar);
         txtMkvMerge.Text = new MediaConverterOptions().MkvMergePath;
@@ -209,10 +225,71 @@ public partial class MainForm : Form
         }
     }
 
+    /// <summary>
+    /// Sets the running window's icon (title bar, taskbar button, minimized, Alt-Tab) from the same
+    /// icon <c>&lt;ApplicationIcon&gt;</c> already embedded into this exe at build time — one source
+    /// of truth rather than a second loose copy that could drift out of sync. Without this, the
+    /// exe's own icon shows correctly everywhere Explorer looks, but the window falls back to
+    /// WinForms' generic default icon while it's actually running, which is what minimizing shows.
+    /// </summary>
+    private void ApplyApplicationIcon()
+    {
+        try
+        {
+            using var extracted = Icon.ExtractAssociatedIcon(Application.ExecutablePath);
+            if (extracted is not null)
+            {
+                Icon = (Icon)extracted.Clone();
+            }
+        }
+        catch (Exception)
+        {
+            // Best-effort and purely cosmetic: no icon is worse than a missing one, never worth
+            // failing the app over, regardless of what GDI+ throws.
+        }
+    }
+
     private void RestartFilePreviewDebounce()
     {
         _filePreviewDebounceTimer.Stop();
         _filePreviewDebounceTimer.Start();
+    }
+
+    private void btnRefreshFilePreview_Click(object? sender, EventArgs e)
+    {
+        _filePreviewDebounceTimer.Stop();
+        _ = RefreshFilePreviewAsync();
+    }
+
+    /// <summary>
+    /// Points <see cref="_filePreviewWatcher"/> at the folder a scan just resolved, or turns it off
+    /// when there is nothing valid to watch. Watching is a convenience on top of the Refresh button
+    /// and the explicit refresh triggers, not a guarantee — some network or virtual drives refuse
+    /// it, silently swallowed here rather than left as an unhandled exception on a background event.
+    /// </summary>
+    private void UpdateFilePreviewWatcher(string? validatedRootPath)
+    {
+        if (validatedRootPath is null)
+        {
+            _filePreviewWatcher.EnableRaisingEvents = false;
+            return;
+        }
+
+        try
+        {
+            if (!string.Equals(_filePreviewWatcher.Path, validatedRootPath, StringComparison.OrdinalIgnoreCase))
+            {
+                _filePreviewWatcher.EnableRaisingEvents = false;
+                _filePreviewWatcher.Path = validatedRootPath;
+            }
+
+            _filePreviewWatcher.IncludeSubdirectories = chkTraverseSubfolders.Checked;
+            _filePreviewWatcher.EnableRaisingEvents = true;
+        }
+        catch (Exception)
+        {
+            _filePreviewWatcher.EnableRaisingEvents = false;
+        }
     }
 
     /// <summary>
@@ -231,6 +308,7 @@ public partial class MainForm : Form
         if (string.IsNullOrWhiteSpace(inputFolder))
         {
             lblFilePreviewSummary.Text = "Choose an input folder to preview its files.";
+            UpdateFilePreviewWatcher(null);
             return;
         }
 
@@ -242,14 +320,18 @@ public partial class MainForm : Form
         catch (Exception ex) when (ex is ArgumentException or NotSupportedException or PathTooLongException)
         {
             lblFilePreviewSummary.Text = $"Invalid folder path: {ex.Message}";
+            UpdateFilePreviewWatcher(null);
             return;
         }
 
         if (!Directory.Exists(rootPath))
         {
             lblFilePreviewSummary.Text = "Folder does not exist.";
+            UpdateFilePreviewWatcher(null);
             return;
         }
+
+        UpdateFilePreviewWatcher(rootPath);
 
         var previewOptions = new MediaConverterOptions
         {
@@ -634,6 +716,20 @@ public partial class MainForm : Form
 
     private void UpdateRunningState(bool isRunning)
     {
+        // A run creates/deletes/renames files in the very folder being watched (temp files, output
+        // moves); suspend the watcher for the duration so that churn doesn't fight the run for the
+        // preview list, instead of just fighting for it more slowly.
+        try
+        {
+            _filePreviewWatcher.EnableRaisingEvents = !isRunning && _filePreviewWatcher.Path.Length > 0;
+        }
+        catch (Exception)
+        {
+            // The watched folder could in principle vanish between calls; watching is best-effort.
+        }
+
+        btnRefreshFilePreview.Enabled = !isRunning;
+
         btnStart.Enabled = !isRunning;
         btnCancel.Enabled = isRunning;
         btnCopyLog.Enabled = !isRunning && lstLog.Items.Count > 0;
