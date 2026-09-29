@@ -59,12 +59,15 @@ internal static class ProgramEntry
         var skipFragment = @"\Processing\";
         string? outputPath = null;
         var languages = new List<string>();
+        string? primaryLanguage = null;
+        var excludeCommentaryTracks = true;
         var trimFromEnd = TimeSpan.Zero;
         string? trimNameAfter = null;
         var removeFromName = new List<string>();
         var dryRun = false;
         var traverseSubfolders = true;
         var maintainFolderStructure = false;
+        var maxParallelFiles = 1;
         var showHelp = false;
 
         for (var index = 0; index < args.Length; index++)
@@ -111,6 +114,29 @@ internal static class ProgramEntry
                 arg.Equals("--language", StringComparison.OrdinalIgnoreCase))
             {
                 languages.AddRange(SplitLanguages(RequireValue(args, ref index, arg)));
+                continue;
+            }
+
+            if (arg.Equals("--primary-language", StringComparison.OrdinalIgnoreCase))
+            {
+                primaryLanguage = RequireValue(args, ref index, arg);
+                continue;
+            }
+
+            if (arg.Equals("--include-commentary", StringComparison.OrdinalIgnoreCase))
+            {
+                excludeCommentaryTracks = false;
+                continue;
+            }
+
+            if (arg.Equals("--parallel", StringComparison.OrdinalIgnoreCase))
+            {
+                var rawParallel = RequireValue(args, ref index, arg);
+                if (!int.TryParse(rawParallel, out maxParallelFiles) || maxParallelFiles < 1)
+                {
+                    throw new ArgumentException($"Invalid value for --parallel: '{rawParallel}'. Use a whole number, 1 or more.");
+                }
+
                 continue;
             }
 
@@ -186,6 +212,9 @@ internal static class ProgramEntry
             MkvPropEditPath = mkvPropEditPath is null ? new MediaConverterOptions().MkvPropEditPath : Path.GetFullPath(mkvPropEditPath),
             SkipFragment = skipFragment,
             Languages = languages.Count == 0 ? [LanguageCatalog.DefaultCode] : languages,
+            PrimaryLanguage = primaryLanguage,
+            ExcludeCommentaryTracks = excludeCommentaryTracks,
+            MaxParallelFiles = maxParallelFiles,
             TrimFromEnd = trimFromEnd,
             TrimNameAfter = trimNameAfter,
             RemoveFromName = removeFromName,
@@ -231,6 +260,9 @@ internal static class ProgramEntry
         Console.WriteLine("  --mkvpropedit <path>   Path to mkvpropedit.exe");
         Console.WriteLine("  --output <path>        Optional output folder. Converted MKVs go directly there");
         Console.WriteLine("  --languages <codes>    Audio/subtitle languages to keep. Default: eng");
+        Console.WriteLine("  --primary-language <c> Audio language to flag as default when 2+ are kept. Default: none");
+        Console.WriteLine("  --include-commentary   Keep commentary-named audio tracks. Default: excluded");
+        Console.WriteLine("  --parallel <n>         Process this many files at once. Default: 1 (sequential)");
         Console.WriteLine("  --trim-end <duration>  Cut this much off the end, e.g. credits. Default: none");
         Console.WriteLine("  --trim-name <pattern>  Cut the file name short after this pattern. Default: none");
         Console.WriteLine("  --remove-from-name <s> Comma-separated text to delete from the file name. Default: none");
@@ -252,6 +284,17 @@ internal static class ProgramEntry
 
         Console.WriteLine();
         Console.WriteLine("  Any other ISO 639 code works too; the list above is just the common ones.");
+        Console.WriteLine();
+        Console.WriteLine("  --primary-language must also be one of --languages. Only changes anything when a file");
+        Console.WriteLine("  keeps 2+ audio tracks; otherwise there is nothing to disambiguate.");
+        Console.WriteLine();
+        Console.WriteLine("  Commentary tracks share their language with the main track, so language selection");
+        Console.WriteLine("  alone can't tell them apart. Any audio track named containing \"commentary\" is");
+        Console.WriteLine("  dropped by default, regardless of language; --include-commentary turns that off.");
+        Console.WriteLine();
+        Console.WriteLine("  --parallel processes several files at once instead of one at a time. Log lines from");
+        Console.WriteLine("  different files interleave when this is above 1, but each line still names its file.");
+        Console.WriteLine("  Match this to your disk and CPU — a spinning HDD can get slower with more, not faster.");
         Console.WriteLine();
         Console.WriteLine("Trimming:");
         Console.WriteLine("  --trim-end takes 10m, 90s, 1h30m, 00:10:00 or 10:00. A bare number means minutes.");

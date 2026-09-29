@@ -18,6 +18,8 @@ public partial class MainForm : Form
     private readonly System.Windows.Forms.Timer _filePreviewDebounceTimer;
     private readonly FileSystemWatcher _filePreviewWatcher;
     private int _filePreviewRequestVersion;
+    private bool _suppressFilePreviewItemCheck;
+    private bool _suppressPresetSelectionChanged;
 
     public MainForm()
     {
@@ -50,7 +52,9 @@ public partial class MainForm : Form
         chkOverwrite.Checked = true;
         chkTraverseSubfolders.Checked = true;
         chkMaintainFolderStructure.Checked = false;
+        chkExcludeCommentary.Checked = true;
         PopulateLanguages();
+        PopulatePresetList();
         SetAdvancedVisibility(false);
         UpdateRunningState(false);
         UpdateSkipDirectoryState();
@@ -297,13 +301,17 @@ public partial class MainForm : Form
     /// thread so a large or slow (e.g. network) folder does not freeze the UI, and guards against
     /// out-of-order results: if the folder or a setting changes again before this scan finishes, a
     /// newer call's higher <see cref="_filePreviewRequestVersion"/> makes this one's result a no-op.
+    /// Manual exclusions (unchecked boxes) are preserved by full path across the refresh, so a live
+    /// update from the file watcher — an unrelated file appearing elsewhere in the folder — does not
+    /// silently discard a selection the user already made.
     /// </summary>
     private async Task RefreshFilePreviewAsync()
     {
         var requestVersion = ++_filePreviewRequestVersion;
         var inputFolder = txtInputFolder.Text.Trim();
+        var previouslyExcludedPaths = GetManuallyExcludedPaths();
 
-        lstFilePreview.Items.Clear();
+        SetFilePreviewItems([]);
 
         if (string.IsNullOrWhiteSpace(inputFolder))
         {
@@ -363,28 +371,129 @@ public partial class MainForm : Form
             return;
         }
 
-        lstFilePreview.BeginUpdate();
-        foreach (var entry in entries)
+        var items = entries.Select(entry =>
         {
             var relativePath = Path.GetRelativePath(rootPath, entry.FullPath);
-            lstFilePreview.Items.Add(entry.WillBeSkipped ? $"{relativePath}  (skip)" : relativePath);
-        }
+            var displayText = entry.WillBeSkipped ? $"{relativePath}  (skip)" : relativePath;
+            var isChecked = !entry.WillBeSkipped && !previouslyExcludedPaths.Contains(entry.FullPath);
+            return (Item: new FilePreviewListItem(displayText, entry.FullPath, entry.WillBeSkipped), Checked: isChecked);
+        }).ToList();
 
-        lstFilePreview.EndUpdate();
+        SetFilePreviewItems(items);
 
-        var skippedCount = entries.Count(entry => entry.WillBeSkipped);
         if (entries.Count == 0)
         {
             lblFilePreviewSummary.Text = $"No supported files found under {rootPath}.";
         }
-        else if (skippedCount == 0)
-        {
-            lblFilePreviewSummary.Text = $"{entries.Count} file(s) found.";
-        }
         else
         {
-            lblFilePreviewSummary.Text = $"{entries.Count} file(s) found, {skippedCount} will be skipped.";
+            UpdateFilePreviewSummary();
         }
+    }
+
+    /// <summary>Full paths of files unchecked by the user — never a skip-fragment match, since those
+    /// are already excluded and their checkbox is locked. Doubles as the set fed into a real run's
+    /// <see cref="MediaConverterOptions.ExcludedPaths"/> and as the memory preserved across a refresh.</summary>
+    private HashSet<string> GetManuallyExcludedPaths()
+    {
+        var excluded = new HashSet<string>(StringComparer.OrdinalIgnoreCase);
+        for (var i = 0; i < lstFilePreview.Items.Count; i++)
+        {
+            if (lstFilePreview.Items[i] is FilePreviewListItem { WillBeSkipped: false } item && !lstFilePreview.GetItemChecked(i))
+            {
+                excluded.Add(item.FullPath);
+            }
+        }
+
+        return excluded;
+    }
+
+    /// <summary>Replaces the preview list's contents in one shot, with per-item check state, without
+    /// the population itself triggering <see cref="lstFilePreview_ItemCheck"/>'s side effects.</summary>
+    private void SetFilePreviewItems(IReadOnlyList<(FilePreviewListItem Item, bool Checked)> items)
+    {
+        _suppressFilePreviewItemCheck = true;
+        try
+        {
+            lstFilePreview.BeginUpdate();
+            lstFilePreview.Items.Clear();
+            foreach (var (item, isChecked) in items)
+            {
+                var index = lstFilePreview.Items.Add(item);
+                lstFilePreview.SetItemChecked(index, isChecked);
+            }
+
+            lstFilePreview.EndUpdate();
+        }
+        finally
+        {
+            _suppressFilePreviewItemCheck = false;
+        }
+    }
+
+    /// <summary>
+    /// Skip-fragment matches are excluded unconditionally — that rule is a deliberate, path-based
+    /// safety net (e.g. protecting an active-download folder), and letting a checkbox silently
+    /// override it would undermine the point of setting it. CheckedListBox has no per-item disabled
+    /// state, so the lock is implemented by reverting any attempted toggle on those specific rows.
+    /// </summary>
+    private void lstFilePreview_ItemCheck(object? sender, ItemCheckEventArgs e)
+    {
+        if (_suppressFilePreviewItemCheck)
+        {
+            return;
+        }
+
+        if (e.Index >= 0 && e.Index < lstFilePreview.Items.Count &&
+            lstFilePreview.Items[e.Index] is FilePreviewListItem { WillBeSkipped: true })
+        {
+            e.NewValue = CheckState.Unchecked;
+            return;
+        }
+
+        // ItemCheck fires before the new state commits; defer so the recount sees it.
+        BeginInvoke(UpdateFilePreviewSummary);
+    }
+
+    private void UpdateFilePreviewSummary()
+    {
+        var total = lstFilePreview.Items.Count;
+        if (total == 0)
+        {
+            return;
+        }
+
+        var skipFragmentCount = 0;
+        var manuallyExcludedCount = 0;
+        for (var i = 0; i < total; i++)
+        {
+            if (lstFilePreview.Items[i] is not FilePreviewListItem item)
+            {
+                continue;
+            }
+
+            if (item.WillBeSkipped)
+            {
+                skipFragmentCount++;
+            }
+            else if (!lstFilePreview.GetItemChecked(i))
+            {
+                manuallyExcludedCount++;
+            }
+        }
+
+        var parts = new List<string> { $"{total} file(s) found" };
+        if (skipFragmentCount > 0)
+        {
+            parts.Add($"{skipFragmentCount} will be skipped");
+        }
+
+        if (manuallyExcludedCount > 0)
+        {
+            parts.Add($"{manuallyExcludedCount} manually excluded");
+        }
+
+        lblFilePreviewSummary.Text = string.Join(", ", parts) + ".";
     }
 
     private void PopulateLanguages()
@@ -396,6 +505,161 @@ public partial class MainForm : Form
             var index = clbLanguages.Items.Add(option);
             clbLanguages.SetItemChecked(index, option.Code == LanguageCatalog.DefaultCode);
         }
+    }
+
+    /// <summary>(Re)loads the preset list from disk into the combo box, preserving the current
+    /// selection by name when it still exists (e.g. after a save that didn't rename anything).</summary>
+    private void PopulatePresetList()
+    {
+        _suppressPresetSelectionChanged = true;
+        try
+        {
+            var selectedName = cboPreset.SelectedItem is ConversionPreset selected ? selected.Name : null;
+
+            cboPreset.Items.Clear();
+            foreach (var preset in PresetStore.Load().OrderBy(p => p.Name, StringComparer.OrdinalIgnoreCase))
+            {
+                cboPreset.Items.Add(preset);
+            }
+
+            cboPreset.SelectedItem = selectedName is null
+                ? null
+                : cboPreset.Items.Cast<ConversionPreset>().FirstOrDefault(p => p.Name == selectedName);
+        }
+        finally
+        {
+            _suppressPresetSelectionChanged = false;
+        }
+
+        btnDeletePreset.Enabled = cboPreset.SelectedItem is not null;
+    }
+
+    private void cboPreset_SelectedIndexChanged(object? sender, EventArgs e)
+    {
+        btnDeletePreset.Enabled = cboPreset.SelectedItem is not null;
+
+        if (_suppressPresetSelectionChanged || cboPreset.SelectedItem is not ConversionPreset preset)
+        {
+            return;
+        }
+
+        ApplyPreset(preset);
+    }
+
+    private void ApplyPreset(ConversionPreset preset)
+    {
+        for (var i = 0; i < clbLanguages.Items.Count; i++)
+        {
+            var option = (LanguageOption)clbLanguages.Items[i]!;
+            clbLanguages.SetItemChecked(i, preset.Languages.Contains(option.Code, StringComparer.OrdinalIgnoreCase));
+        }
+
+        txtPrimaryLanguage.Text = preset.PrimaryLanguage ?? string.Empty;
+        chkExcludeCommentary.Checked = preset.ExcludeCommentaryTracks;
+        txtTrimEnd.Text = preset.TrimFromEnd ?? string.Empty;
+        txtTrimName.Text = preset.TrimNameAfter ?? string.Empty;
+        txtRemoveFromName.Text = preset.RemoveFromName ?? string.Empty;
+    }
+
+    private void btnSavePreset_Click(object? sender, EventArgs e)
+    {
+        var currentName = cboPreset.SelectedItem is ConversionPreset selected ? selected.Name : string.Empty;
+
+        using var dialog = new PresetNameDialog("Save Preset", currentName);
+        if (dialog.ShowDialog(this) != DialogResult.OK)
+        {
+            return;
+        }
+
+        var name = dialog.PresetName;
+        if (string.IsNullOrWhiteSpace(name))
+        {
+            MessageBox.Show(this, "Enter a name for the preset.", "Save Preset", MessageBoxButtons.OK, MessageBoxIcon.Warning);
+            return;
+        }
+
+        var presets = PresetStore.Load();
+        var existing = presets.FirstOrDefault(p => string.Equals(p.Name, name, StringComparison.OrdinalIgnoreCase));
+        if (existing is not null)
+        {
+            var overwrite = MessageBox.Show(
+                this,
+                $"A preset named \"{name}\" already exists. Overwrite it?",
+                "Save Preset",
+                MessageBoxButtons.YesNo,
+                MessageBoxIcon.Question);
+            if (overwrite != DialogResult.Yes)
+            {
+                return;
+            }
+
+            presets.Remove(existing);
+        }
+
+        var languages = clbLanguages.CheckedItems.Cast<LanguageOption>().Select(option => option.Code).ToList();
+        if (languages.Count == 0)
+        {
+            MessageBox.Show(this, "Select at least one language before saving a preset.", "Save Preset", MessageBoxButtons.OK, MessageBoxIcon.Warning);
+            return;
+        }
+
+        var preset = new ConversionPreset
+        {
+            Name = name,
+            Languages = languages,
+            PrimaryLanguage = string.IsNullOrWhiteSpace(txtPrimaryLanguage.Text) ? null : txtPrimaryLanguage.Text.Trim(),
+            ExcludeCommentaryTracks = chkExcludeCommentary.Checked,
+            TrimFromEnd = string.IsNullOrWhiteSpace(txtTrimEnd.Text) ? null : txtTrimEnd.Text.Trim(),
+            TrimNameAfter = string.IsNullOrWhiteSpace(txtTrimName.Text) ? null : txtTrimName.Text.Trim(),
+            RemoveFromName = string.IsNullOrWhiteSpace(txtRemoveFromName.Text) ? null : txtRemoveFromName.Text.Trim(),
+        };
+        presets.Add(preset);
+
+        try
+        {
+            PresetStore.Save(presets);
+        }
+        catch (Exception ex)
+        {
+            MessageBox.Show(this, $"Could not save the preset: {ex.Message}", "Save Preset", MessageBoxButtons.OK, MessageBoxIcon.Error);
+            return;
+        }
+
+        PopulatePresetList();
+    }
+
+    private void btnDeletePreset_Click(object? sender, EventArgs e)
+    {
+        if (cboPreset.SelectedItem is not ConversionPreset selected)
+        {
+            return;
+        }
+
+        var confirm = MessageBox.Show(
+            this,
+            $"Delete the preset \"{selected.Name}\"?",
+            "Delete Preset",
+            MessageBoxButtons.YesNo,
+            MessageBoxIcon.Question);
+        if (confirm != DialogResult.Yes)
+        {
+            return;
+        }
+
+        var presets = PresetStore.Load();
+        presets.RemoveAll(p => string.Equals(p.Name, selected.Name, StringComparison.OrdinalIgnoreCase));
+
+        try
+        {
+            PresetStore.Save(presets);
+        }
+        catch (Exception ex)
+        {
+            MessageBox.Show(this, $"Could not delete the preset: {ex.Message}", "Delete Preset", MessageBoxButtons.OK, MessageBoxIcon.Error);
+            return;
+        }
+
+        PopulatePresetList();
     }
 
     private MediaConverterOptions BuildOptions()
@@ -448,10 +712,29 @@ public partial class MainForm : Form
             throw new ArgumentException("Select at least one language to keep.");
         }
 
+        var primaryLanguage = txtPrimaryLanguage.Text.Trim();
+        if (!string.IsNullOrWhiteSpace(primaryLanguage))
+        {
+            if (!LanguageCatalog.IsValidCode(primaryLanguage))
+            {
+                throw new ArgumentException(
+                    $"'{primaryLanguage}' is not a valid primary language code. Use an ISO 639 code such as eng, spa or fre.");
+            }
+
+            if (!LanguageCatalog.IsSelected(LanguageCatalog.Normalize(languages), primaryLanguage))
+            {
+                throw new ArgumentException("The primary language must also be checked in the Languages list.");
+            }
+        }
+
         var outputFolder = txtOutputFolder.Text.Trim();
         return new MediaConverterOptions
         {
             Languages = languages,
+            PrimaryLanguage = string.IsNullOrWhiteSpace(primaryLanguage) ? null : primaryLanguage,
+            ExcludeCommentaryTracks = chkExcludeCommentary.Checked,
+            ExcludedPaths = GetManuallyExcludedPaths(),
+            MaxParallelFiles = (int)numParallelFiles.Value,
             TrimFromEnd = trimFromEnd,
             TrimNameAfter = string.IsNullOrWhiteSpace(trimNameAfter) ? null : trimNameAfter,
             RemoveFromName = removeFromName,
@@ -751,6 +1034,14 @@ public partial class MainForm : Form
         lblLanguages.Enabled = !isRunning;
         txtTrimEnd.Enabled = !isRunning;
         lblTrimEnd.Enabled = !isRunning;
+        txtPrimaryLanguage.Enabled = !isRunning;
+        lblPrimaryLanguage.Enabled = !isRunning;
+        chkExcludeCommentary.Enabled = !isRunning;
+        numParallelFiles.Enabled = !isRunning;
+        lstFilePreview.Enabled = !isRunning;
+        cboPreset.Enabled = !isRunning;
+        btnSavePreset.Enabled = !isRunning;
+        btnDeletePreset.Enabled = !isRunning && cboPreset.SelectedItem is not null;
         txtTrimName.Enabled = !isRunning;
         lblTrimName.Enabled = !isRunning;
         txtRemoveFromName.Enabled = !isRunning;
@@ -766,4 +1057,11 @@ public partial class MainForm : Form
 internal sealed record LogEntry(string Text, Color? BackColor = null)
 {
     public override string ToString() => Text;
+}
+
+/// <summary>One row in the file preview <see cref="CheckedListBox"/>, carrying the full path the
+/// checkbox actually controls alongside the (relative, possibly "(skip)"-suffixed) display text.</summary>
+internal sealed record FilePreviewListItem(string DisplayText, string FullPath, bool WillBeSkipped)
+{
+    public override string ToString() => DisplayText;
 }

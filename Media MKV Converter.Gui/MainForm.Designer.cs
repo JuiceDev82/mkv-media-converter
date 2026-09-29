@@ -14,12 +14,17 @@ partial class MainForm
     private TableLayoutPanel layoutFilePreview;
     private Label lblFilePreviewSummary;
     private Button btnRefreshFilePreview;
-    private ListBox lstFilePreview;
+    private CheckedListBox lstFilePreview;
     private CheckBox chkOverwrite;
     private Label lblSkip;
     private TextBox txtSkip;
     private Label lblLanguages;
     private CheckedListBox clbLanguages;
+    private Label lblPrimaryLanguage;
+    private TextBox txtPrimaryLanguage;
+    private CheckBox chkExcludeCommentary;
+    private Label lblParallelFiles;
+    private NumericUpDown numParallelFiles;
     private Label lblTrimEnd;
     private TextBox txtTrimEnd;
     private Label lblTrimName;
@@ -37,6 +42,11 @@ partial class MainForm
     private Button btnOpenOutputFolder;
     private Panel panelAdvanced;
     private TableLayoutPanel layoutAdvanced;
+    private Label lblPreset;
+    private FlowLayoutPanel panelPreset;
+    private ComboBox cboPreset;
+    private Button btnSavePreset;
+    private Button btnDeletePreset;
     private FlowLayoutPanel panelAdvancedOptions;
     private Label lblMkvMerge;
     private TextBox txtMkvMerge;
@@ -86,12 +96,17 @@ partial class MainForm
         layoutFilePreview = new TableLayoutPanel();
         lblFilePreviewSummary = new Label();
         btnRefreshFilePreview = new Button();
-        lstFilePreview = new ListBox();
+        lstFilePreview = new CheckedListBox();
         chkOverwrite = new CheckBox();
         lblSkip = new Label();
         txtSkip = new TextBox();
         lblLanguages = new Label();
         clbLanguages = new CheckedListBox();
+        lblPrimaryLanguage = new Label();
+        txtPrimaryLanguage = new TextBox();
+        chkExcludeCommentary = new CheckBox();
+        lblParallelFiles = new Label();
+        numParallelFiles = new NumericUpDown();
         lblTrimEnd = new Label();
         txtTrimEnd = new TextBox();
         lblTrimName = new Label();
@@ -109,6 +124,11 @@ partial class MainForm
         btnOpenOutputFolder = new Button();
         panelAdvanced = new Panel();
         layoutAdvanced = new TableLayoutPanel();
+        lblPreset = new Label();
+        panelPreset = new FlowLayoutPanel();
+        cboPreset = new ComboBox();
+        btnSavePreset = new Button();
+        btnDeletePreset = new Button();
         panelAdvancedOptions = new FlowLayoutPanel();
         lblMkvMerge = new Label();
         txtMkvMerge = new TextBox();
@@ -305,6 +325,7 @@ partial class MainForm
         //
         // lstFilePreview
         //
+        lstFilePreview.CheckOnClick = true;
         lstFilePreview.Dock = DockStyle.Fill;
         lstFilePreview.FormattingEnabled = true;
         lstFilePreview.HorizontalScrollbar = true;
@@ -313,6 +334,7 @@ partial class MainForm
         lstFilePreview.Name = "lstFilePreview";
         lstFilePreview.Size = new Size(1042, 75);
         lstFilePreview.TabIndex = 1;
+        lstFilePreview.ItemCheck += lstFilePreview_ItemCheck;
         //
         // panelTopActions
         // 
@@ -384,7 +406,7 @@ partial class MainForm
         panelAdvanced.Dock = DockStyle.Fill;
         panelAdvanced.Location = new Point(15, 123);
         panelAdvanced.Name = "panelAdvanced";
-        panelAdvanced.Size = new Size(1054, 324);
+        panelAdvanced.Size = new Size(1054, 392);
         panelAdvanced.TabIndex = 11;
         // 
         // layoutAdvanced
@@ -393,27 +415,32 @@ partial class MainForm
         layoutAdvanced.ColumnStyles.Add(new ColumnStyle(SizeType.Absolute, 115F));
         layoutAdvanced.ColumnStyles.Add(new ColumnStyle(SizeType.Percent, 100F));
         layoutAdvanced.ColumnStyles.Add(new ColumnStyle(SizeType.Absolute, 100F));
-        layoutAdvanced.Controls.Add(lblMkvMerge, 0, 0);
-        layoutAdvanced.Controls.Add(txtMkvMerge, 1, 0);
-        layoutAdvanced.Controls.Add(btnBrowseMkvMerge, 2, 0);
-        layoutAdvanced.Controls.Add(lblMkvPropEdit, 0, 1);
-        layoutAdvanced.Controls.Add(txtMkvPropEdit, 1, 1);
-        layoutAdvanced.Controls.Add(btnBrowseMkvPropEdit, 2, 1);
-        layoutAdvanced.Controls.Add(lblSkip, 0, 2);
-        layoutAdvanced.Controls.Add(txtSkip, 1, 2);
-        layoutAdvanced.Controls.Add(lblLanguages, 0, 3);
-        layoutAdvanced.Controls.Add(clbLanguages, 1, 3);
-        layoutAdvanced.Controls.Add(lblTrimEnd, 0, 4);
-        layoutAdvanced.Controls.Add(txtTrimEnd, 1, 4);
-        layoutAdvanced.Controls.Add(lblTrimName, 0, 5);
-        layoutAdvanced.Controls.Add(txtTrimName, 1, 5);
-        layoutAdvanced.Controls.Add(lblRemoveFromName, 0, 6);
-        layoutAdvanced.Controls.Add(txtRemoveFromName, 1, 6);
-        layoutAdvanced.Controls.Add(panelAdvancedOptions, 1, 7);
+        layoutAdvanced.Controls.Add(lblPreset, 0, 0);
+        layoutAdvanced.Controls.Add(panelPreset, 1, 0);
+        layoutAdvanced.Controls.Add(lblMkvMerge, 0, 1);
+        layoutAdvanced.Controls.Add(txtMkvMerge, 1, 1);
+        layoutAdvanced.Controls.Add(btnBrowseMkvMerge, 2, 1);
+        layoutAdvanced.Controls.Add(lblMkvPropEdit, 0, 2);
+        layoutAdvanced.Controls.Add(txtMkvPropEdit, 1, 2);
+        layoutAdvanced.Controls.Add(btnBrowseMkvPropEdit, 2, 2);
+        layoutAdvanced.Controls.Add(lblSkip, 0, 3);
+        layoutAdvanced.Controls.Add(txtSkip, 1, 3);
+        layoutAdvanced.Controls.Add(lblLanguages, 0, 4);
+        layoutAdvanced.Controls.Add(clbLanguages, 1, 4);
+        layoutAdvanced.Controls.Add(lblPrimaryLanguage, 0, 5);
+        layoutAdvanced.Controls.Add(txtPrimaryLanguage, 1, 5);
+        layoutAdvanced.Controls.Add(lblTrimEnd, 0, 6);
+        layoutAdvanced.Controls.Add(txtTrimEnd, 1, 6);
+        layoutAdvanced.Controls.Add(lblTrimName, 0, 7);
+        layoutAdvanced.Controls.Add(txtTrimName, 1, 7);
+        layoutAdvanced.Controls.Add(lblRemoveFromName, 0, 8);
+        layoutAdvanced.Controls.Add(txtRemoveFromName, 1, 8);
+        layoutAdvanced.Controls.Add(panelAdvancedOptions, 1, 9);
         layoutAdvanced.Dock = DockStyle.Fill;
         layoutAdvanced.Location = new Point(0, 0);
         layoutAdvanced.Name = "layoutAdvanced";
-        layoutAdvanced.RowCount = 8;
+        layoutAdvanced.RowCount = 10;
+        layoutAdvanced.RowStyles.Add(new RowStyle(SizeType.Absolute, 34F));
         layoutAdvanced.RowStyles.Add(new RowStyle(SizeType.Absolute, 34F));
         layoutAdvanced.RowStyles.Add(new RowStyle(SizeType.Absolute, 34F));
         layoutAdvanced.RowStyles.Add(new RowStyle(SizeType.Absolute, 34F));
@@ -422,8 +449,10 @@ partial class MainForm
         layoutAdvanced.RowStyles.Add(new RowStyle(SizeType.Absolute, 34F));
         layoutAdvanced.RowStyles.Add(new RowStyle(SizeType.Absolute, 34F));
         layoutAdvanced.RowStyles.Add(new RowStyle(SizeType.Absolute, 34F));
-        layoutAdvanced.Size = new Size(1054, 324);
+        layoutAdvanced.RowStyles.Add(new RowStyle(SizeType.Absolute, 34F));
+        layoutAdvanced.Size = new Size(1054, 392);
         layoutAdvanced.TabIndex = 0;
+        layoutAdvanced.SetColumnSpan(panelPreset, 2);
         layoutAdvanced.SetColumnSpan(panelAdvancedOptions, 2);
         layoutAdvanced.SetColumnSpan(clbLanguages, 2);
         // 
@@ -433,12 +462,65 @@ partial class MainForm
         panelAdvancedOptions.Controls.Add(chkDryRun);
         panelAdvancedOptions.Controls.Add(chkTraverseSubfolders);
         panelAdvancedOptions.Controls.Add(chkMaintainFolderStructure);
+        panelAdvancedOptions.Controls.Add(chkExcludeCommentary);
+        panelAdvancedOptions.Controls.Add(lblParallelFiles);
+        panelAdvancedOptions.Controls.Add(numParallelFiles);
         panelAdvancedOptions.Dock = DockStyle.Fill;
         panelAdvancedOptions.Location = new Point(118, 105);
         panelAdvancedOptions.Name = "panelAdvancedOptions";
         panelAdvancedOptions.Size = new Size(933, 44);
-        panelAdvancedOptions.TabIndex = 16;
-        // 
+        panelAdvancedOptions.TabIndex = 18;
+        //
+        // lblPreset
+        //
+        lblPreset.Anchor = AnchorStyles.Left;
+        lblPreset.AutoSize = true;
+        lblPreset.Location = new Point(3, 9);
+        lblPreset.Name = "lblPreset";
+        lblPreset.Size = new Size(45, 15);
+        lblPreset.TabIndex = 0;
+        lblPreset.Text = "Preset";
+        //
+        // panelPreset
+        //
+        panelPreset.Controls.Add(cboPreset);
+        panelPreset.Controls.Add(btnSavePreset);
+        panelPreset.Controls.Add(btnDeletePreset);
+        panelPreset.Dock = DockStyle.Fill;
+        panelPreset.Location = new Point(118, 3);
+        panelPreset.Name = "panelPreset";
+        panelPreset.Size = new Size(933, 28);
+        panelPreset.TabIndex = 1;
+        //
+        // cboPreset
+        //
+        cboPreset.DropDownStyle = ComboBoxStyle.DropDownList;
+        cboPreset.Location = new Point(3, 3);
+        cboPreset.Name = "cboPreset";
+        cboPreset.Size = new Size(300, 23);
+        cboPreset.TabIndex = 0;
+        cboPreset.SelectedIndexChanged += cboPreset_SelectedIndexChanged;
+        //
+        // btnSavePreset
+        //
+        btnSavePreset.Location = new Point(309, 3);
+        btnSavePreset.Name = "btnSavePreset";
+        btnSavePreset.Size = new Size(94, 25);
+        btnSavePreset.TabIndex = 1;
+        btnSavePreset.Text = "Save As...";
+        btnSavePreset.UseVisualStyleBackColor = true;
+        btnSavePreset.Click += btnSavePreset_Click;
+        //
+        // btnDeletePreset
+        //
+        btnDeletePreset.Location = new Point(409, 3);
+        btnDeletePreset.Name = "btnDeletePreset";
+        btnDeletePreset.Size = new Size(94, 25);
+        btnDeletePreset.TabIndex = 2;
+        btnDeletePreset.Text = "Delete";
+        btnDeletePreset.UseVisualStyleBackColor = true;
+        btnDeletePreset.Click += btnDeletePreset_Click;
+        //
         // lblMkvMerge
         // 
         lblMkvMerge.Anchor = AnchorStyles.Left;
@@ -540,6 +622,25 @@ partial class MainForm
         clbLanguages.Size = new Size(933, 77);
         clbLanguages.TabIndex = 9;
         //
+        // lblPrimaryLanguage
+        //
+        lblPrimaryLanguage.Anchor = AnchorStyles.Left;
+        lblPrimaryLanguage.AutoSize = true;
+        lblPrimaryLanguage.Location = new Point(3, 205);
+        lblPrimaryLanguage.Name = "lblPrimaryLanguage";
+        lblPrimaryLanguage.Size = new Size(98, 15);
+        lblPrimaryLanguage.TabIndex = 10;
+        lblPrimaryLanguage.Text = "Primary Language";
+        //
+        // txtPrimaryLanguage
+        //
+        txtPrimaryLanguage.Anchor = AnchorStyles.Left | AnchorStyles.Right;
+        txtPrimaryLanguage.Location = new Point(118, 201);
+        txtPrimaryLanguage.Name = "txtPrimaryLanguage";
+        txtPrimaryLanguage.PlaceholderText = "Optional - audio language to auto-select when 2+ are kept, e.g. eng";
+        txtPrimaryLanguage.Size = new Size(833, 23);
+        txtPrimaryLanguage.TabIndex = 11;
+        //
         // lblTrimEnd
         //
         lblTrimEnd.Anchor = AnchorStyles.Left;
@@ -547,7 +648,7 @@ partial class MainForm
         lblTrimEnd.Location = new Point(3, 205);
         lblTrimEnd.Name = "lblTrimEnd";
         lblTrimEnd.Size = new Size(77, 15);
-        lblTrimEnd.TabIndex = 10;
+        lblTrimEnd.TabIndex = 12;
         lblTrimEnd.Text = "Trim From End";
         //
         // txtTrimEnd
@@ -557,7 +658,7 @@ partial class MainForm
         txtTrimEnd.Name = "txtTrimEnd";
         txtTrimEnd.PlaceholderText = "Optional - cut credits off the end, e.g. 10m, 90s, 1h30m or 00:10:00";
         txtTrimEnd.Size = new Size(833, 23);
-        txtTrimEnd.TabIndex = 11;
+        txtTrimEnd.TabIndex = 13;
         //
         // lblTrimName
         //
@@ -566,7 +667,7 @@ partial class MainForm
         lblTrimName.Location = new Point(3, 239);
         lblTrimName.Name = "lblTrimName";
         lblTrimName.Size = new Size(84, 15);
-        lblTrimName.TabIndex = 12;
+        lblTrimName.TabIndex = 14;
         lblTrimName.Text = "Trim Name After";
         //
         // txtTrimName
@@ -576,7 +677,7 @@ partial class MainForm
         txtTrimName.Name = "txtTrimName";
         txtTrimName.PlaceholderText = "Optional - drop the rest of the name after this pattern, * = one character, e.g. S01E**";
         txtTrimName.Size = new Size(833, 23);
-        txtTrimName.TabIndex = 13;
+        txtTrimName.TabIndex = 15;
         //
         // lblRemoveFromName
         //
@@ -585,7 +686,7 @@ partial class MainForm
         lblRemoveFromName.Location = new Point(3, 273);
         lblRemoveFromName.Name = "lblRemoveFromName";
         lblRemoveFromName.Size = new Size(104, 15);
-        lblRemoveFromName.TabIndex = 14;
+        lblRemoveFromName.TabIndex = 16;
         lblRemoveFromName.Text = "Remove From Name";
         //
         // txtRemoveFromName
@@ -595,7 +696,7 @@ partial class MainForm
         txtRemoveFromName.Name = "txtRemoveFromName";
         txtRemoveFromName.PlaceholderText = "Optional - comma-separated text to delete wherever it appears, e.g. REPACK,PROPER";
         txtRemoveFromName.Size = new Size(833, 23);
-        txtRemoveFromName.TabIndex = 15;
+        txtRemoveFromName.TabIndex = 17;
         //
         // chkOverwrite
         // 
@@ -645,6 +746,41 @@ partial class MainForm
         chkMaintainFolderStructure.TabIndex = 3;
         chkMaintainFolderStructure.Text = "Maintain Folder Structure";
         chkMaintainFolderStructure.UseVisualStyleBackColor = true;
+        //
+        // chkExcludeCommentary
+        //
+        chkExcludeCommentary.Anchor = AnchorStyles.Left;
+        chkExcludeCommentary.AutoSize = true;
+        chkExcludeCommentary.Checked = true;
+        chkExcludeCommentary.CheckState = CheckState.Checked;
+        chkExcludeCommentary.Location = new Point(478, 3);
+        chkExcludeCommentary.Name = "chkExcludeCommentary";
+        chkExcludeCommentary.Size = new Size(165, 19);
+        chkExcludeCommentary.TabIndex = 4;
+        chkExcludeCommentary.Text = "Exclude Commentary Tracks";
+        chkExcludeCommentary.UseVisualStyleBackColor = true;
+        //
+        // lblParallelFiles
+        //
+        lblParallelFiles.Anchor = AnchorStyles.Left;
+        lblParallelFiles.AutoSize = true;
+        lblParallelFiles.Location = new Point(649, 6);
+        lblParallelFiles.Margin = new Padding(9, 6, 3, 0);
+        lblParallelFiles.Name = "lblParallelFiles";
+        lblParallelFiles.Size = new Size(80, 15);
+        lblParallelFiles.TabIndex = 5;
+        lblParallelFiles.Text = "Parallel Files";
+        //
+        // numParallelFiles
+        //
+        numParallelFiles.Anchor = AnchorStyles.Left;
+        numParallelFiles.Location = new Point(735, 3);
+        numParallelFiles.Maximum = new decimal(new int[] { 8, 0, 0, 0 });
+        numParallelFiles.Minimum = new decimal(new int[] { 1, 0, 0, 0 });
+        numParallelFiles.Name = "numParallelFiles";
+        numParallelFiles.Size = new Size(50, 23);
+        numParallelFiles.TabIndex = 6;
+        numParallelFiles.Value = new decimal(new int[] { 1, 0, 0, 0 });
         //
         // progressOverall
         // 
@@ -850,9 +986,9 @@ partial class MainForm
         // 
         AutoScaleDimensions = new SizeF(7F, 15F);
         AutoScaleMode = AutoScaleMode.Font;
-        ClientSize = new Size(1084, 953);
+        ClientSize = new Size(1084, 1021);
         Controls.Add(layoutRoot);
-        MinimumSize = new Size(960, 892);
+        MinimumSize = new Size(960, 960);
         Name = "MainForm";
         StartPosition = FormStartPosition.CenterScreen;
         Text = "Media MKV Converter";

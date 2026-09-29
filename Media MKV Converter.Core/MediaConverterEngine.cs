@@ -1,3 +1,4 @@
+using System.Collections.Concurrent;
 using System.Diagnostics;
 using System.Text;
 using System.Text.Json;
@@ -20,10 +21,32 @@ public sealed class MediaConverterOptions
     public string SkipFragment { get; init; } = @"\Processing\";
 
     /// <summary>
+    /// Specific file paths to leave out of this run, on top of <see cref="SkipFragment"/> — the GUI's
+    /// preview-list checkboxes feed this. Purely additive: it can only remove files from a run, never
+    /// add back ones <see cref="SkipFragment"/> already excludes. Always empty from the console, which
+    /// has no per-file picker.
+    /// </summary>
+    public IReadOnlySet<string> ExcludedPaths { get; init; } = new HashSet<string>(StringComparer.OrdinalIgnoreCase);
+
+    /// <summary>
     /// ISO 639 codes of the audio and subtitle languages to keep. Undetermined ("und") is always
     /// kept on top of these; see <see cref="LanguageCatalog"/>.
     /// </summary>
     public IReadOnlyList<string> Languages { get; init; } = [LanguageCatalog.DefaultCode];
+
+    /// <summary>
+    /// Audio language to flag as the default/auto-selected track when more than one is kept. Null
+    /// leaves mkvmerge's own default (the first kept audio track) alone. Must be one of
+    /// <see cref="Languages"/>. Only ever changes files that keep 2+ audio tracks in the first place.
+    /// </summary>
+    public string? PrimaryLanguage { get; init; }
+
+    /// <summary>
+    /// Drop audio tracks whose name contains "commentary", even when their language is otherwise
+    /// selected — language alone can't tell a commentary track from the main one, since both
+    /// typically carry the same language tag. Subtitle tracks are unaffected. Defaults to on.
+    /// </summary>
+    public bool ExcludeCommentaryTracks { get; init; } = true;
 
     /// <summary>
     /// How much to cut off the end of each file, for trailing credits. Zero keeps the whole file.
@@ -54,6 +77,15 @@ public sealed class MediaConverterOptions
     public bool MaintainFolderStructure { get; init; }
 
     public bool DryRun { get; init; }
+
+    /// <summary>
+    /// How many files to process at once. Defaults to 1 (sequential, the original behavior). Above
+    /// 1, two things change: which of two colliding output names "wins" becomes whichever file's
+    /// inspect stage finishes first rather than deterministically alphabetical, and stage log lines
+    /// from different files interleave rather than running in a strict per-file block — both call
+    /// out the file they belong to, so the log stays readable, just no longer strictly linear.
+    /// </summary>
+    public int MaxParallelFiles { get; init; } = 1;
 }
 
 public enum MediaConverterEventKind
@@ -107,56 +139,90 @@ public sealed class MediaConverterEngine
 
         var totalStopwatch = Stopwatch.StartNew();
         var files = EnumerateInputFiles(options).ToList();
+        var runSummaryLines = new List<string> { $"Found {files.Count} supported file(s) under {options.RootPath}" };
+        runSummaryLines.Add($"Keeping languages: {string.Join(", ", languages)}");
+        if (!string.IsNullOrWhiteSpace(options.PrimaryLanguage))
+        {
+            runSummaryLines.Add($"Primary audio language: {options.PrimaryLanguage.Trim()}");
+        }
+
+        if (options.ExcludeCommentaryTracks)
+        {
+            runSummaryLines.Add("Excluding commentary audio tracks");
+        }
+
+        if (options.TrimFromEnd > TimeSpan.Zero)
+        {
+            runSummaryLines.Add($"Trimming from end: {DurationParser.Format(options.TrimFromEnd)}");
+        }
+
+        if (!string.IsNullOrWhiteSpace(options.TrimNameAfter))
+        {
+            runSummaryLines.Add($"Trimming names after: {options.TrimNameAfter.Trim()}");
+        }
+
+        if (options.RemoveFromName.Count > 0)
+        {
+            runSummaryLines.Add($"Removing from names: {string.Join(", ", options.RemoveFromName)}");
+        }
+
+        if (options.MaxParallelFiles > 1)
+        {
+            runSummaryLines.Add($"Processing up to {options.MaxParallelFiles} files at once");
+        }
+
         progress?.Report(new MediaConverterProgress(
             MediaConverterEventKind.RunStarted,
-            $"Found {files.Count} supported file(s) under {options.RootPath}{Environment.NewLine}Keeping languages: {string.Join(", ", languages)}" +
-            (options.TrimFromEnd > TimeSpan.Zero
-                ? $"{Environment.NewLine}Trimming from end: {DurationParser.Format(options.TrimFromEnd)}"
-                : string.Empty) +
-            (string.IsNullOrWhiteSpace(options.TrimNameAfter)
-                ? string.Empty
-                : $"{Environment.NewLine}Trimming names after: {options.TrimNameAfter.Trim()}") +
-            (options.RemoveFromName.Count == 0
-                ? string.Empty
-                : $"{Environment.NewLine}Removing from names: {string.Join(", ", options.RemoveFromName)}"),
+            string.Join(Environment.NewLine, runSummaryLines),
             TotalFiles: files.Count));
 
-        var claimedOutputPaths = new HashSet<string>(StringComparer.OrdinalIgnoreCase);
+        var claimedOutputPaths = new ConcurrentDictionary<string, byte>(StringComparer.OrdinalIgnoreCase);
         var successCount = 0;
         var skipCount = 0;
         var failureCount = 0;
         var completedCount = 0;
-        var sequenceIndex = 0;
 
-        foreach (var filePath in files)
+        var parallelOptions = new ParallelOptions
         {
-            cancellationToken.ThrowIfCancellationRequested();
+            MaxDegreeOfParallelism = Math.Max(1, options.MaxParallelFiles),
+            CancellationToken = cancellationToken,
+        };
 
-            sequenceIndex++;
+        // files[i] is used directly as the sequence number's source rather than a shared counter,
+        // since incrementing one concurrently would need its own synchronization for no real benefit
+        // — the file list's order already gives every file a stable, unique position.
+        await Parallel.ForEachAsync(files.Select((path, index) => (Path: path, Sequence: index + 1)), parallelOptions, async (file, fileCancellationToken) =>
+        {
             var fileStopwatch = Stopwatch.StartNew();
 
-            if (ShouldSkip(filePath, options))
+            // ExcludedPaths is checked separately from ShouldSkip (skip-fragment only), so
+            // PreviewFiles' WillBeSkipped — computed via ShouldSkip alone — keeps meaning exactly
+            // "matches the skip fragment", independent of whatever a GUI viewer has manually unchecked.
+            if (ShouldSkip(file.Path, options) || options.ExcludedPaths.Contains(file.Path))
             {
-                skipCount++;
-                completedCount++;
-                var skipPercent = CalculatePercentComplete(completedCount, files.Count);
+                Interlocked.Increment(ref skipCount);
+                var completedAt = Interlocked.Increment(ref completedCount);
+                var skipPercent = CalculatePercentComplete(completedAt, files.Count);
                 progress?.Report(new MediaConverterProgress(
                     MediaConverterEventKind.FileSkipped,
-                    $"[{sequenceIndex}/{files.Count}] [skip] {filePath} ({skipPercent:0.#}%, elapsed {FormatDuration(totalStopwatch.Elapsed)})",
-                    filePath,
-                    sequenceIndex,
+                    $"[{file.Sequence}/{files.Count}] [skip] {file.Path} ({skipPercent:0.#}%, elapsed {FormatDuration(totalStopwatch.Elapsed)})",
+                    file.Path,
+                    file.Sequence,
                     files.Count,
                     skipPercent,
                     totalStopwatch.Elapsed,
                     fileStopwatch.Elapsed));
-                continue;
+                return;
             }
 
             try
             {
-                await ProcessFileAsync(filePath, sequenceIndex, completedCount, files.Count, totalStopwatch, fileStopwatch, options, languages, claimedOutputPaths, progress, cancellationToken);
-                successCount++;
-                completedCount++;
+                // A best-effort snapshot for the "starting percent" shown in the FileStarted event —
+                // under concurrency this is approximate (another file may finish a moment later), same
+                // as any other live progress percentage; it is display-only, never a control-flow value.
+                await ProcessFileAsync(file.Path, file.Sequence, completedCount, files.Count, totalStopwatch, fileStopwatch, options, languages, claimedOutputPaths, progress, fileCancellationToken);
+                Interlocked.Increment(ref successCount);
+                Interlocked.Increment(ref completedCount);
             }
             catch (OperationCanceledException)
             {
@@ -164,20 +230,20 @@ public sealed class MediaConverterEngine
             }
             catch (Exception ex)
             {
-                failureCount++;
-                completedCount++;
-                var failurePercent = CalculatePercentComplete(completedCount, files.Count);
+                Interlocked.Increment(ref failureCount);
+                var completedAt = Interlocked.Increment(ref completedCount);
+                var failurePercent = CalculatePercentComplete(completedAt, files.Count);
                 progress?.Report(new MediaConverterProgress(
                     MediaConverterEventKind.FileFailed,
-                    $"[error] {filePath}{Environment.NewLine}        File runtime: {FormatDuration(fileStopwatch.Elapsed)}{Environment.NewLine}        {ex.Message}",
-                    filePath,
-                    sequenceIndex,
+                    $"[error] {file.Path}{Environment.NewLine}        File runtime: {FormatDuration(fileStopwatch.Elapsed)}{Environment.NewLine}        {ex.Message}",
+                    file.Path,
+                    file.Sequence,
                     files.Count,
                     failurePercent,
                     totalStopwatch.Elapsed,
                     fileStopwatch.Elapsed));
             }
-        }
+        });
 
         var summary = new MediaConverterRunSummary(
             files.Count,
@@ -241,7 +307,7 @@ public sealed class MediaConverterEngine
         Stopwatch fileStopwatch,
         MediaConverterOptions options,
         IReadOnlyList<string> languages,
-        HashSet<string> claimedOutputPaths,
+        ConcurrentDictionary<string, byte> claimedOutputPaths,
         IProgress<MediaConverterProgress>? progress,
         CancellationToken cancellationToken)
     {
@@ -262,18 +328,20 @@ public sealed class MediaConverterEngine
         }
         else
         {
-            ReportStage("inspect-source", 1, 8);
+            ReportStage("inspect-source", 1, 9);
         }
 
         var originalInfo = await ReadMkvInfoAsync(inputPath, options, cancellationToken);
-        EnsureAudioSurvives(originalInfo, languages);
+        EnsureAudioSurvives(originalInfo, languages, options.ExcludeCommentaryTracks);
         var trimEndpoint = ResolveTrimEndpoint(originalInfo, options);
         var forcedSubtitlePositions = GetForcedSubtitlePositions(originalInfo, languages);
         var preferredOutputPath = GetPreferredOutputPath(inputPath, options);
 
         // Trimming names makes collisions easy — two releases of one episode reduce to the same
         // name — and in-place mode would delete the loser's source after overwriting its output.
-        if (!claimedOutputPaths.Add(preferredOutputPath))
+        // TryAdd rather than Add: under parallel processing, two files can reach this line at once,
+        // and only a genuinely atomic check-and-claim avoids a race where both believe they won.
+        if (!claimedOutputPaths.TryAdd(preferredOutputPath, 0))
         {
             throw new InvalidOperationException(
                 $"Another file in this run already produces \"{Path.GetFileName(preferredOutputPath)}\". " +
@@ -287,7 +355,7 @@ public sealed class MediaConverterEngine
             ReportStage("dry-run", 2, 2);
             progress?.Report(new MediaConverterProgress(
                 MediaConverterEventKind.FileCompleted,
-                $"        Output: {ResolveOutputPath(preferredOutputPath, options)}{Environment.NewLine}        File runtime: {FormatDuration(fileStopwatch.Elapsed)}{Environment.NewLine}        Forced subtitle positions: {FormatList(forcedSubtitlePositions)}{DescribeTrimPlan(originalInfo, trimEndpoint)}{DescribeRename(inputPath, ResolveOutputPath(preferredOutputPath, options))}{Environment.NewLine}        Would clear track names after remux",
+                $"        Output: {ResolveOutputPath(preferredOutputPath, options)}{Environment.NewLine}        File runtime: {FormatDuration(fileStopwatch.Elapsed)}{Environment.NewLine}        Forced subtitle positions: {FormatList(forcedSubtitlePositions)}{DescribeTrimPlan(originalInfo, trimEndpoint)}{DescribeRename(inputPath, ResolveOutputPath(preferredOutputPath, options))}{DescribeCommentaryExclusionPlan(originalInfo, languages, options.ExcludeCommentaryTracks)}{DescribePrimaryAudioPlan(originalInfo, languages, options.ExcludeCommentaryTracks, options.PrimaryLanguage)}{Environment.NewLine}        Would clear track names after remux",
                 inputPath,
                 fileIndex,
                 totalFiles,
@@ -302,10 +370,10 @@ public sealed class MediaConverterEngine
 
         try
         {
-            ReportStage("remux", 2, 8);
+            ReportStage("remux", 2, 9);
             await RunProcessAsync(
                 options.MkvMergePath,
-                BuildMkvMergeArguments(inputPath, tempOutputPath, languages, trimEndpoint),
+                BuildMkvMergeArguments(inputPath, tempOutputPath, originalInfo, languages, options.ExcludeCommentaryTracks, trimEndpoint),
                 "mkvmerge failed",
                 cancellationToken);
 
@@ -314,10 +382,10 @@ public sealed class MediaConverterEngine
                 throw new InvalidOperationException($"mkvmerge did not create output file: {tempOutputPath}");
             }
 
-            ReportStage("replace-output", 3, 8);
+            ReportStage("replace-output", 3, 9);
             var finalOutputPath = ReplaceOutput(inputPath, preferredOutputPath, tempOutputPath, options);
 
-            ReportStage("inspect-output", 4, 8);
+            ReportStage("inspect-output", 4, 9);
             var outputInfo = await ReadMkvInfoAsync(finalOutputPath, options, cancellationToken);
             var namedTrackPositions = GetNamedTrackPositions(outputInfo);
             var forcedNamedTrackPositions = forcedSubtitlePositions
@@ -326,7 +394,7 @@ public sealed class MediaConverterEngine
                 .Select(position => position!.Value)
                 .ToHashSet();
 
-            ReportStage("set-forced-flags", 5, 8);
+            ReportStage("set-forced-flags", 5, 9);
             foreach (var subtitlePosition in forcedSubtitlePositions)
             {
                 cancellationToken.ThrowIfCancellationRequested();
@@ -337,7 +405,7 @@ public sealed class MediaConverterEngine
                     cancellationToken);
             }
 
-            ReportStage("clear-track-names", 6, 8);
+            ReportStage("clear-track-names", 6, 9);
             foreach (var trackPosition in namedTrackPositions)
             {
                 cancellationToken.ThrowIfCancellationRequested();
@@ -353,7 +421,7 @@ public sealed class MediaConverterEngine
                     cancellationToken);
             }
 
-            ReportStage("set-forced-names", 7, 8);
+            ReportStage("set-forced-names", 7, 9);
             foreach (var subtitlePosition in forcedSubtitlePositions)
             {
                 cancellationToken.ThrowIfCancellationRequested();
@@ -364,10 +432,26 @@ public sealed class MediaConverterEngine
                     cancellationToken);
             }
 
-            ReportStage("complete", 8, 8);
+            ReportStage("set-primary-audio", 8, 9);
+            var primaryAudioFlags = ResolvePrimaryAudioTrackFlags(outputInfo, options.PrimaryLanguage);
+            var primaryAudioPosition = primaryAudioFlags?.FirstOrDefault(f => f.IsDefault).Position;
+            if (primaryAudioFlags is not null)
+            {
+                foreach (var (position, isDefault) in primaryAudioFlags)
+                {
+                    cancellationToken.ThrowIfCancellationRequested();
+                    await RunProcessAsync(
+                        options.MkvPropEditPath,
+                        $"\"{finalOutputPath}\" --edit track:{position} --set flag-default={(isDefault ? 1 : 0)}",
+                        $"Failed to set default flag on audio track {position}",
+                        cancellationToken);
+                }
+            }
+
+            ReportStage("complete", 9, 9);
             progress?.Report(new MediaConverterProgress(
                 MediaConverterEventKind.FileCompleted,
-                $"        Output: {finalOutputPath}{Environment.NewLine}        File runtime: {FormatDuration(fileStopwatch.Elapsed)}{Environment.NewLine}        Forced subtitle positions: {FormatList(forcedSubtitlePositions)}{DescribeTrimResult(originalInfo, outputInfo, trimEndpoint)}{DescribeRename(inputPath, finalOutputPath)}{Environment.NewLine}        Cleared track names: {FormatList(namedTrackPositions.Where(position => !forcedNamedTrackPositions.Contains(position)).ToList())}",
+                $"        Output: {finalOutputPath}{Environment.NewLine}        File runtime: {FormatDuration(fileStopwatch.Elapsed)}{Environment.NewLine}        Forced subtitle positions: {FormatList(forcedSubtitlePositions)}{DescribeTrimResult(originalInfo, outputInfo, trimEndpoint)}{DescribeRename(inputPath, finalOutputPath)}{DescribePrimaryAudio(primaryAudioPosition)}{Environment.NewLine}        Cleared track names: {FormatList(namedTrackPositions.Where(position => !forcedNamedTrackPositions.Contains(position)).ToList())}",
                 inputPath,
                 fileIndex,
                 totalFiles,
@@ -388,7 +472,9 @@ public sealed class MediaConverterEngine
 
             progress?.Report(new MediaConverterProgress(
                 MediaConverterEventKind.StageChanged,
-                $"        -> {stage} ({filePercent:0}%)",
+                // Named explicitly rather than relying on position under the preceding FileStarted
+                // line: with MaxParallelFiles > 1, stage lines from different files interleave.
+                $"        [{Path.GetFileName(inputPath)}] -> {stage} ({filePercent:0}%)",
                 inputPath,
                 fileIndex,
                 totalFiles,
@@ -570,16 +656,45 @@ public sealed class MediaConverterEngine
         return string.IsNullOrWhiteSpace(language) || LanguageCatalog.IsSelected(languages, language);
     }
 
+    private static bool IsCommentaryTrack(MkvTrack track) =>
+        !string.IsNullOrWhiteSpace(track.Properties.TrackName) &&
+        track.Properties.TrackName.Contains("commentary", StringComparison.OrdinalIgnoreCase);
+
+    /// <summary>
+    /// Audio tracks that will actually survive the remux: language-selected, and — when
+    /// <paramref name="excludeCommentary"/> — not name-flagged as commentary. The single source of
+    /// truth for "what audio makes it through", shared by <see cref="EnsureAudioSurvives"/> and
+    /// <see cref="BuildMkvMergeArguments"/> so the two can never disagree about which tracks these
+    /// are, the same discipline <see cref="LanguageCatalog"/> already requires for languages.
+    /// </summary>
+    private static List<MkvTrack> GetSurvivingAudioTracks(MkvInfo info, IReadOnlyList<string> languages, bool excludeCommentary) =>
+        info.Tracks
+            .Where(track => IsTrackType(track, "audio"))
+            .Where(track => IsLanguageKept(track, languages))
+            .Where(track => !excludeCommentary || !IsCommentaryTrack(track))
+            .ToList();
+
     /// <summary>
     /// Guards against remuxing away every audio track. In-place mode deletes the source, so a
-    /// language selection the file cannot satisfy would otherwise destroy the only copy.
+    /// selection the file cannot satisfy would otherwise destroy the only copy.
     /// </summary>
-    private static void EnsureAudioSurvives(MkvInfo info, IReadOnlyList<string> languages)
+    private static void EnsureAudioSurvives(MkvInfo info, IReadOnlyList<string> languages, bool excludeCommentary)
     {
         var audioTracks = info.Tracks.Where(track => IsTrackType(track, "audio")).ToList();
-        if (audioTracks.Count == 0 || audioTracks.Any(track => IsLanguageKept(track, languages)))
+        if (audioTracks.Count == 0 || GetSurvivingAudioTracks(info, languages, excludeCommentary).Count > 0)
         {
             return;
+        }
+
+        var languageMatches = audioTracks.Where(track => IsLanguageKept(track, languages)).ToList();
+
+        if (languageMatches.Count > 0)
+        {
+            // Every matching track exists but is commentary-flagged — a different, more useful
+            // message than "no audio in these languages", since audio in that language does exist.
+            throw new InvalidOperationException(
+                $"Every audio track in the selected languages ({string.Join(", ", languages)}) is a commentary " +
+                "track, and commentary tracks are excluded. Left unchanged. Turn off commentary exclusion to keep it anyway.");
         }
 
         var available = audioTracks
@@ -609,6 +724,45 @@ public sealed class MediaConverterEngine
         return positions;
     }
 
+    /// <summary>
+    /// Absolute track positions (1-based, matching mkvpropedit's <c>track:N</c> addressing) of every
+    /// audio track in the output, paired with whether each should become the default. Returns null
+    /// — meaning "leave mkvmerge's own default choice alone" — when there is nothing to do: no
+    /// primary language set, fewer than two audio tracks in the output, or the requested language
+    /// was not actually kept in this particular file.
+    /// </summary>
+    private static List<(int Position, bool IsDefault)>? ResolvePrimaryAudioTrackFlags(MkvInfo outputInfo, string? primaryLanguage)
+    {
+        if (string.IsNullOrWhiteSpace(primaryLanguage))
+        {
+            return null;
+        }
+
+        var audioTracks = outputInfo.Tracks
+            .Select((track, index) => (Track: track, Position: index + 1))
+            .Where(t => IsTrackType(t.Track, "audio"))
+            .ToList();
+
+        if (audioTracks.Count < 2)
+        {
+            return null;
+        }
+
+        var primaryList = new[] { primaryLanguage };
+        var winnerPosition = audioTracks
+            .Where(t => !string.IsNullOrWhiteSpace(t.Track.Properties.Language) &&
+                        LanguageCatalog.IsSelected(primaryList, t.Track.Properties.Language!))
+            .Select(t => (int?)t.Position)
+            .FirstOrDefault();
+
+        if (winnerPosition is null)
+        {
+            return null;
+        }
+
+        return audioTracks.Select(t => (t.Position, IsDefault: t.Position == winnerPosition)).ToList();
+    }
+
     private static int? TryGetTrackPositionForSubtitle(MkvInfo info, int subtitlePosition)
     {
         var currentSubtitlePosition = 0;
@@ -633,17 +787,35 @@ public sealed class MediaConverterEngine
     private static string BuildMkvMergeArguments(
         string inputPath,
         string outputPath,
+        MkvInfo sourceInfo,
         IReadOnlyList<string> languages,
+        bool excludeCommentary,
         TimeSpan? trimEndpoint)
     {
         var trackLanguages = string.Join(',', languages);
+
+        // Commentary tracks share their language with the "real" track, so language alone can't
+        // exclude them — mkvmerge's --audio-tracks flag has to fall back to explicit source track
+        // IDs instead of the simple language list for this file. Only done when a commentary track
+        // is actually present among the language matches, so the common case (no commentary in the
+        // file, or the option off) keeps using the plain, well-exercised language-list form.
+        var audioSelector = trackLanguages;
+        if (excludeCommentary)
+        {
+            var languageMatches = GetSurvivingAudioTracks(sourceInfo, languages, excludeCommentary: false);
+            if (languageMatches.Any(IsCommentaryTrack))
+            {
+                var surviving = GetSurvivingAudioTracks(sourceInfo, languages, excludeCommentary: true);
+                audioSelector = string.Join(',', surviving.Select(track => track.Id));
+            }
+        }
 
         var arguments = new List<string>
         {
             "--output",
             $"\"{outputPath}\"",
             "--audio-tracks",
-            trackLanguages,
+            audioSelector,
             "--subtitle-tracks",
             trackLanguages,
             "--default-language",
@@ -709,6 +881,39 @@ public sealed class MediaConverterEngine
         return string.Equals(before, after, StringComparison.OrdinalIgnoreCase)
             ? string.Empty
             : $"{Environment.NewLine}        Renamed: {before} -> {after}";
+    }
+
+    private static string DescribePrimaryAudio(int? position) =>
+        position is null ? string.Empty : $"{Environment.NewLine}        Default audio track: {position}";
+
+    private static string DescribeCommentaryExclusionPlan(MkvInfo source, IReadOnlyList<string> languages, bool excludeCommentary)
+    {
+        if (!excludeCommentary)
+        {
+            return string.Empty;
+        }
+
+        var excludedCount = GetSurvivingAudioTracks(source, languages, excludeCommentary: false).Count(IsCommentaryTrack);
+        return excludedCount == 0
+            ? string.Empty
+            : $"{Environment.NewLine}        Would exclude {excludedCount} commentary audio track(s)";
+    }
+
+    private static string DescribePrimaryAudioPlan(MkvInfo source, IReadOnlyList<string> languages, bool excludeCommentary, string? primaryLanguage)
+    {
+        if (string.IsNullOrWhiteSpace(primaryLanguage))
+        {
+            return string.Empty;
+        }
+
+        var surviving = GetSurvivingAudioTracks(source, languages, excludeCommentary);
+        var primaryList = new[] { primaryLanguage };
+        var hasMatch = surviving.Count >= 2 && surviving.Any(t =>
+            !string.IsNullOrWhiteSpace(t.Properties.Language) && LanguageCatalog.IsSelected(primaryList, t.Properties.Language!));
+
+        return hasMatch
+            ? $"{Environment.NewLine}        Would set default audio track to {primaryLanguage}"
+            : string.Empty;
     }
 
     /// <summary>Dry-run wording. The endpoint is approximate because mkvmerge snaps it to a keyframe.</summary>
@@ -807,6 +1012,11 @@ public sealed class MediaConverterEngine
             throw new ArgumentException("Trim from end cannot be negative.");
         }
 
+        if (options.MaxParallelFiles < 1)
+        {
+            throw new ArgumentException("Parallel files must be at least 1.");
+        }
+
         if (!FileNameTrimmer.IsValidPattern(options.TrimNameAfter))
         {
             throw new ArgumentException(
@@ -822,12 +1032,30 @@ public sealed class MediaConverterEngine
             }
         }
 
+        var normalizedLanguages = LanguageCatalog.Normalize(options.Languages);
+
+        if (!string.IsNullOrWhiteSpace(options.PrimaryLanguage))
+        {
+            var primaryLanguage = options.PrimaryLanguage.Trim();
+            if (!LanguageCatalog.IsValidCode(primaryLanguage))
+            {
+                throw new ArgumentException(
+                    $"Invalid primary language code: '{options.PrimaryLanguage}'. Use an ISO 639 code such as eng, spa or fre.");
+            }
+
+            if (!LanguageCatalog.IsSelected(normalizedLanguages, primaryLanguage))
+            {
+                throw new ArgumentException(
+                    $"Primary language '{primaryLanguage}' must also be one of the selected languages to keep.");
+            }
+        }
+
         if (!string.IsNullOrWhiteSpace(options.OutputPath))
         {
             Directory.CreateDirectory(options.OutputPath);
         }
 
-        return LanguageCatalog.Normalize(options.Languages);
+        return normalizedLanguages;
     }
 
     private static async Task<ProcessResult> RunProcessAsync(
@@ -915,6 +1143,12 @@ internal sealed class MkvContainerProperties
 
 internal sealed class MkvTrack
 {
+    /// <summary>mkvmerge's own numeric track ID — what <c>--audio-tracks</c> takes for explicit
+    /// (non-language) track selection. Distinct from every "position" used elsewhere in this file,
+    /// which are 1-based indexes into the track list, not this ID.</summary>
+    [JsonPropertyName("id")]
+    public int Id { get; init; }
+
     [JsonPropertyName("type")]
     public string Type { get; init; } = string.Empty;
 

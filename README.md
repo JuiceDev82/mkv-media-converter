@@ -7,9 +7,9 @@ Remuxing only: no re-encoding, so video and audio are copied bit-for-bit and run
 ## What it does to each file
 
 1. **Inspect** — `mkvmerge -J` the source and parse the JSON track layout.
-2. **Remux** — write a temporary sibling file keeping only the selected languages, dropping the title, global and per-track tags, attachments, and chapters, and cutting the tail if a trim is set.
+2. **Remux** — write a temporary sibling file keeping only the selected languages (minus any commentary tracks, by default), dropping the title, global and per-track tags, attachments, and chapters, and cutting the tail if a trim is set.
 3. **Replace** — move the temp file into place (in-place) or into a destination folder (`--output`), under a trimmed name if a name pattern is set.
-4. **Retag** — re-inspect the result with `mkvpropedit`: set forced flags on subtitle tracks that look forced, clear every non-forced track name, and name the forced ones `Forced`.
+4. **Retag** — re-inspect the result with `mkvpropedit`: set forced flags on subtitle tracks that look forced, clear every non-forced track name, name the forced ones `Forced`, and flag the primary language's audio track as default if one was chosen.
 
 A subtitle track counts as forced when its name contains `forced` or `foreign`, or when its `forced_track` flag is already set.
 
@@ -36,6 +36,14 @@ Two rules apply on every language selection:
 
 - **Undetermined (`und`) is always kept.** mkvmerge tags a track carrying no language as undetermined, and dropping those could leave a file with no audio.
 - **A file is left untouched if no audio track matches your selection.** You get an error naming the languages that file actually has, rather than a silently muted result — which matters because in-place mode deletes the original.
+
+### Primary audio language
+
+If you keep more than one audio track, `--primary-language <code>` (console) or **Settings → Primary Language** (GUI) picks which one auto-selects on playback, overriding mkvmerge's own default (whichever kept track happened to come first in the source). It must also be one of your selected languages. On a file that only ends up keeping one audio track there's nothing to disambiguate, so it does nothing there.
+
+### Commentary tracks
+
+Commentary tracks are excluded by default — `--include-commentary` (console) or unchecking **Settings → Exclude Commentary Tracks** (GUI) turns that off. Language selection alone can't filter these out, since a commentary track usually carries the *same* language tag as the main one; this instead looks for `commentary` in the track's own name. If a language you selected turns out to have *only* a commentary track and no plain one, the file is left untouched with an error explaining why, the same safety net as having no matching language at all.
 
 ## Trimming the end
 
@@ -94,6 +102,21 @@ Whatever dots, dashes or spaces the removal leaves stranded next to each other a
 
 > **In-place mode deletes the original before moving the remuxed file into place.** A crash in that window loses the source file. Use `--output` (or `--dry-run` first) if that matters to you.
 
+## Presets (GUI)
+
+The **Preset** dropdown at the top of Settings saves and restores the "what kind of show is this" fields in one step: languages, primary language, commentary exclusion, and all three name/trim settings. **Save As...** names and stores the current values (`%AppData%\MediaMkvConverter\presets.json`); picking a preset from the list applies it immediately; **Delete** removes the selected one. Deliberately left out: folder paths, the skip fragment, tool paths, and the overwrite/dry-run/maintain-structure/parallel-files toggles — those describe how *this run* behaves, not what kind of content it is, so they stay with the current session rather than being saved into a reusable profile.
+
+## Selecting files to process (GUI)
+
+Every entry in **Files To Process** has its own checkbox — uncheck one to leave it out of the run without moving it out of the folder or touching the skip fragment. A file already excluded by the skip fragment shows its checkbox locked unchecked, since that rule is meant to be unconditional; toggling it there does nothing. Unchecked files survive a live refresh (the folder watcher picking up an unrelated change elsewhere) by full path, so they don't silently get reselected out from under you.
+
+## Parallel processing
+
+By default files are processed one at a time. `--parallel <n>` (console) or the **Parallel Files** spinner (GUI) raises that; try 2–4 and see what your disk can take — remuxing is I/O-bound, so a spinning HDD may get *slower*, not faster, with more than one file writing to it at once. Correctness doesn't change: the same collision guard, audio and duration safety checks apply regardless of how many files run at once. Two things do change above 1:
+
+- **Log lines interleave.** Every stage line names its own file (`[Show.S01E07.mkv] -> remux (25%)`), so the log stays readable, just no longer strictly one file at a time top to bottom.
+- **A same-run naming collision is decided by timing, not alphabetical order.** Sequentially, the first file alphabetically always wins a collision. In parallel, whichever file's inspect stage happens to finish first wins — still exactly one winner, the rest still refused and reported as failures, just no longer predictable in advance.
+
 ## Requirements
 
 - [.NET 9 SDK](https://dotnet.microsoft.com/download) or newer to build (a newer SDK builds the `net9.0` targets fine).
@@ -120,9 +143,12 @@ MediaMkvConverter <rootPath> [options]
   --mkvpropedit <path>   Path to mkvpropedit.exe
   --output <path>        Optional output folder. Converted MKVs go directly there
   --languages <codes>    Audio/subtitle languages to keep. Default: eng
+  --primary-language <c> Audio language to flag as default when 2+ are kept. Default: none
+  --include-commentary   Keep commentary-named audio tracks. Default: excluded
   --trim-end <duration>  Cut this much off the end, e.g. credits. Default: none
   --trim-name <pattern>  Cut the file name short after this pattern. Default: none
   --remove-from-name <s> Comma-separated text to delete from the file name. Default: none
+  --parallel <n>         Process this many files at once. Default: 1 (sequential)
   --skip <fragment>      Path fragment to skip. Default: \Processing\
   --no-subfolders        Process only the input folder itself
   --maintain-structure   Recreate input subfolders under --output
@@ -136,7 +162,7 @@ Any file whose path contains the skip fragment (`\Processing\` by default) is pa
 
 ## GUI
 
-`Media MKV Converter.Gui` is a WinForms shell over the same engine: input and output folder pickers, the tool paths, the skip fragment, the language checkboxes, the trim-from-end, trim-name and remove-from-name fields, and toggles for subfolder traversal, folder-structure mirroring, overwrite, and dry-run. Progress lines are colour-coded by event kind.
+`Media MKV Converter.Gui` is a WinForms shell over the same engine: input and output folder pickers, a preset picker, the tool paths, the skip fragment, the language checkboxes, the primary-language, trim-from-end, trim-name and remove-from-name fields, a Parallel Files spinner, and toggles for subfolder traversal, folder-structure mirroring, overwrite, dry-run, and commentary exclusion. Progress lines are colour-coded by event kind.
 
 `AppIcon.ico` (a generated play-badge icon) is embedded into the exe via `<ApplicationIcon>` and re-applied to the running window at startup — see `MainForm.ApplyApplicationIcon`. To use your own icon instead, replace the file and keep the name, or update `<ApplicationIcon>` in the `.csproj` to point at a different one.
 
