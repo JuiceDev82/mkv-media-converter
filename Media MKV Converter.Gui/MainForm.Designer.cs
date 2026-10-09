@@ -31,6 +31,8 @@ partial class MainForm
     private TextBox txtTrimName;
     private Label lblRemoveFromName;
     private TextBox txtRemoveFromName;
+    private Label lblReplaceInName;
+    private TextBox txtReplaceInName;
     private CheckBox chkDryRun;
     private CheckBox chkTraverseSubfolders;
     private CheckBox chkMaintainFolderStructure;
@@ -113,6 +115,8 @@ partial class MainForm
         txtTrimName = new TextBox();
         lblRemoveFromName = new Label();
         txtRemoveFromName = new TextBox();
+        lblReplaceInName = new Label();
+        txtReplaceInName = new TextBox();
         chkDryRun = new CheckBox();
         chkTraverseSubfolders = new CheckBox();
         chkMaintainFolderStructure = new CheckBox();
@@ -406,7 +410,7 @@ partial class MainForm
         panelAdvanced.Dock = DockStyle.Fill;
         panelAdvanced.Location = new Point(15, 123);
         panelAdvanced.Name = "panelAdvanced";
-        panelAdvanced.Size = new Size(1054, 392);
+        panelAdvanced.Size = new Size(1054, 426);
         panelAdvanced.TabIndex = 11;
         // 
         // layoutAdvanced
@@ -435,11 +439,13 @@ partial class MainForm
         layoutAdvanced.Controls.Add(txtTrimName, 1, 7);
         layoutAdvanced.Controls.Add(lblRemoveFromName, 0, 8);
         layoutAdvanced.Controls.Add(txtRemoveFromName, 1, 8);
-        layoutAdvanced.Controls.Add(panelAdvancedOptions, 1, 9);
+        layoutAdvanced.Controls.Add(lblReplaceInName, 0, 9);
+        layoutAdvanced.Controls.Add(txtReplaceInName, 1, 9);
+        layoutAdvanced.Controls.Add(panelAdvancedOptions, 1, 10);
         layoutAdvanced.Dock = DockStyle.Fill;
         layoutAdvanced.Location = new Point(0, 0);
         layoutAdvanced.Name = "layoutAdvanced";
-        layoutAdvanced.RowCount = 10;
+        layoutAdvanced.RowCount = 11;
         layoutAdvanced.RowStyles.Add(new RowStyle(SizeType.Absolute, 34F));
         layoutAdvanced.RowStyles.Add(new RowStyle(SizeType.Absolute, 34F));
         layoutAdvanced.RowStyles.Add(new RowStyle(SizeType.Absolute, 34F));
@@ -450,7 +456,8 @@ partial class MainForm
         layoutAdvanced.RowStyles.Add(new RowStyle(SizeType.Absolute, 34F));
         layoutAdvanced.RowStyles.Add(new RowStyle(SizeType.Absolute, 34F));
         layoutAdvanced.RowStyles.Add(new RowStyle(SizeType.Absolute, 34F));
-        layoutAdvanced.Size = new Size(1054, 392);
+        layoutAdvanced.RowStyles.Add(new RowStyle(SizeType.Absolute, 34F));
+        layoutAdvanced.Size = new Size(1054, 426);
         layoutAdvanced.TabIndex = 0;
         layoutAdvanced.SetColumnSpan(panelPreset, 2);
         layoutAdvanced.SetColumnSpan(panelAdvancedOptions, 2);
@@ -469,7 +476,7 @@ partial class MainForm
         panelAdvancedOptions.Location = new Point(118, 105);
         panelAdvancedOptions.Name = "panelAdvancedOptions";
         panelAdvancedOptions.Size = new Size(933, 44);
-        panelAdvancedOptions.TabIndex = 18;
+        panelAdvancedOptions.TabIndex = 20;
         //
         // lblPreset
         //
@@ -637,7 +644,7 @@ partial class MainForm
         txtPrimaryLanguage.Anchor = AnchorStyles.Left | AnchorStyles.Right;
         txtPrimaryLanguage.Location = new Point(118, 201);
         txtPrimaryLanguage.Name = "txtPrimaryLanguage";
-        txtPrimaryLanguage.PlaceholderText = "Optional - audio language to auto-select when 2+ are kept, e.g. eng";
+        txtPrimaryLanguage.PlaceholderText = "Defaults to eng if kept - audio language to mark as default, e.g. jpn";
         txtPrimaryLanguage.Size = new Size(833, 23);
         txtPrimaryLanguage.TabIndex = 11;
         //
@@ -678,6 +685,7 @@ partial class MainForm
         txtTrimName.PlaceholderText = "Optional - drop the rest of the name after this pattern, * = one character, e.g. S01E**";
         txtTrimName.Size = new Size(833, 23);
         txtTrimName.TabIndex = 15;
+        txtTrimName.TextChanged += txtTrimName_TextChanged;
         //
         // lblRemoveFromName
         //
@@ -697,6 +705,27 @@ partial class MainForm
         txtRemoveFromName.PlaceholderText = "Optional - comma-separated text to delete wherever it appears, e.g. REPACK,PROPER";
         txtRemoveFromName.Size = new Size(833, 23);
         txtRemoveFromName.TabIndex = 17;
+        txtRemoveFromName.TextChanged += txtRemoveFromName_TextChanged;
+        //
+        // lblReplaceInName
+        //
+        lblReplaceInName.Anchor = AnchorStyles.Left;
+        lblReplaceInName.AutoSize = true;
+        lblReplaceInName.Location = new Point(3, 307);
+        lblReplaceInName.Name = "lblReplaceInName";
+        lblReplaceInName.Size = new Size(94, 15);
+        lblReplaceInName.TabIndex = 18;
+        lblReplaceInName.Text = "Replace In Name";
+        //
+        // txtReplaceInName
+        //
+        txtReplaceInName.Anchor = AnchorStyles.Left | AnchorStyles.Right;
+        txtReplaceInName.Location = new Point(118, 303);
+        txtReplaceInName.Name = "txtReplaceInName";
+        txtReplaceInName.PlaceholderText = "Optional - comma-separated find=replace, e.g. .=_ (replacement spaces are kept exactly as typed)";
+        txtReplaceInName.Size = new Size(833, 23);
+        txtReplaceInName.TabIndex = 19;
+        txtReplaceInName.TextChanged += txtReplaceInName_TextChanged;
         //
         // chkOverwrite
         // 
@@ -986,9 +1015,9 @@ partial class MainForm
         // 
         AutoScaleDimensions = new SizeF(7F, 15F);
         AutoScaleMode = AutoScaleMode.Font;
-        ClientSize = new Size(1084, 1021);
+        ClientSize = new Size(1084, 1055);
         Controls.Add(layoutRoot);
-        MinimumSize = new Size(960, 960);
+        MinimumSize = new Size(960, 994);
         Name = "MainForm";
         StartPosition = FormStartPosition.CenterScreen;
         Text = "Media MKV Converter";

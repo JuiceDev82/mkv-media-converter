@@ -1,5 +1,6 @@
 using System.Text.Json;
 using System.Text.Json.Serialization;
+using Media_MKV_Converter.Core;
 
 namespace Media_MKV_Converter.Gui;
 
@@ -27,6 +28,11 @@ public sealed class ConversionPreset
     public string? TrimNameAfter { get; set; }
 
     public string? RemoveFromName { get; set; }
+
+    /// <summary>Saved and restored with no trimming, unlike every other string field here — a
+    /// trailing space can be the replacement value itself ("replace periods with spaces"), and
+    /// trimming it on save would silently break that exact round-trip. See <see cref="FileNameReplacer"/>.</summary>
+    public string? ReplaceInName { get; set; }
 
     /// <summary>Lets a plain <c>ComboBox.Items.Add(preset)</c> show the name without a DisplayMember.</summary>
     public override string ToString() => Name;

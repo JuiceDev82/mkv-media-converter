@@ -68,6 +68,15 @@ public sealed class MediaConverterOptions
     /// </summary>
     public IReadOnlyList<string> RemoveFromName { get; init; } = [];
 
+    /// <summary>
+    /// Literal find/replace pairs applied to the output file name, in order, after
+    /// <see cref="RemoveFromName"/> — "replace periods with spaces" is the motivating case. Unlike
+    /// <see cref="RemoveFromName"/> this never tidies up separators afterward, since a replace is an
+    /// exact substitution the user asked for, not debris left behind by deleting something. See
+    /// <see cref="FileNameReplacer"/>.
+    /// </summary>
+    public IReadOnlyList<(string Find, string ReplaceWith)> ReplaceInName { get; init; } = [];
+
     public string? OutputPath { get; init; }
 
     public bool OverwriteExisting { get; init; } = true;
@@ -136,14 +145,15 @@ public sealed class MediaConverterEngine
         CancellationToken cancellationToken = default)
     {
         var languages = ValidateOptions(options);
+        var primaryLanguage = ResolveEffectivePrimaryLanguage(options, languages);
 
         var totalStopwatch = Stopwatch.StartNew();
         var files = EnumerateInputFiles(options).ToList();
         var runSummaryLines = new List<string> { $"Found {files.Count} supported file(s) under {options.RootPath}" };
         runSummaryLines.Add($"Keeping languages: {string.Join(", ", languages)}");
-        if (!string.IsNullOrWhiteSpace(options.PrimaryLanguage))
+        if (!string.IsNullOrWhiteSpace(primaryLanguage))
         {
-            runSummaryLines.Add($"Primary audio language: {options.PrimaryLanguage.Trim()}");
+            runSummaryLines.Add($"Primary audio language: {primaryLanguage}");
         }
 
         if (options.ExcludeCommentaryTracks)
@@ -164,6 +174,14 @@ public sealed class MediaConverterEngine
         if (options.RemoveFromName.Count > 0)
         {
             runSummaryLines.Add($"Removing from names: {string.Join(", ", options.RemoveFromName)}");
+        }
+
+        if (options.ReplaceInName.Count > 0)
+        {
+            // Quoted so a whitespace-only replacement (the headline use case: periods to spaces)
+            // is actually visible in the log, rather than silently vanishing between commas.
+            var pairText = string.Join(", ", options.ReplaceInName.Select(pair => $"'{pair.Find}' -> '{pair.ReplaceWith}'"));
+            runSummaryLines.Add($"Replacing in names: {pairText}");
         }
 
         if (options.MaxParallelFiles > 1)
@@ -220,7 +238,7 @@ public sealed class MediaConverterEngine
                 // A best-effort snapshot for the "starting percent" shown in the FileStarted event —
                 // under concurrency this is approximate (another file may finish a moment later), same
                 // as any other live progress percentage; it is display-only, never a control-flow value.
-                await ProcessFileAsync(file.Path, file.Sequence, completedCount, files.Count, totalStopwatch, fileStopwatch, options, languages, claimedOutputPaths, progress, fileCancellationToken);
+                await ProcessFileAsync(file.Path, file.Sequence, completedCount, files.Count, totalStopwatch, fileStopwatch, options, languages, primaryLanguage, claimedOutputPaths, progress, fileCancellationToken);
                 Interlocked.Increment(ref successCount);
                 Interlocked.Increment(ref completedCount);
             }
@@ -307,6 +325,7 @@ public sealed class MediaConverterEngine
         Stopwatch fileStopwatch,
         MediaConverterOptions options,
         IReadOnlyList<string> languages,
+        string? primaryLanguage,
         ConcurrentDictionary<string, byte> claimedOutputPaths,
         IProgress<MediaConverterProgress>? progress,
         CancellationToken cancellationToken)
@@ -355,7 +374,7 @@ public sealed class MediaConverterEngine
             ReportStage("dry-run", 2, 2);
             progress?.Report(new MediaConverterProgress(
                 MediaConverterEventKind.FileCompleted,
-                $"        Output: {ResolveOutputPath(preferredOutputPath, options)}{Environment.NewLine}        File runtime: {FormatDuration(fileStopwatch.Elapsed)}{Environment.NewLine}        Forced subtitle positions: {FormatList(forcedSubtitlePositions)}{DescribeTrimPlan(originalInfo, trimEndpoint)}{DescribeRename(inputPath, ResolveOutputPath(preferredOutputPath, options))}{DescribeCommentaryExclusionPlan(originalInfo, languages, options.ExcludeCommentaryTracks)}{DescribePrimaryAudioPlan(originalInfo, languages, options.ExcludeCommentaryTracks, options.PrimaryLanguage)}{Environment.NewLine}        Would clear track names after remux",
+                $"        Output: {ResolveOutputPath(preferredOutputPath, options)}{Environment.NewLine}        File runtime: {FormatDuration(fileStopwatch.Elapsed)}{Environment.NewLine}        Forced subtitle positions: {FormatList(forcedSubtitlePositions)}{DescribeTrimPlan(originalInfo, trimEndpoint)}{DescribeRename(inputPath, ResolveOutputPath(preferredOutputPath, options))}{DescribeCommentaryExclusionPlan(originalInfo, languages, options.ExcludeCommentaryTracks)}{DescribePrimaryAudioPlan(originalInfo, languages, options.ExcludeCommentaryTracks, primaryLanguage)}{Environment.NewLine}        Would clear track names after remux",
                 inputPath,
                 fileIndex,
                 totalFiles,
@@ -433,7 +452,7 @@ public sealed class MediaConverterEngine
             }
 
             ReportStage("set-primary-audio", 8, 9);
-            var primaryAudioFlags = ResolvePrimaryAudioTrackFlags(outputInfo, options.PrimaryLanguage);
+            var primaryAudioFlags = ResolvePrimaryAudioTrackFlags(outputInfo, primaryLanguage);
             var primaryAudioPosition = primaryAudioFlags?.FirstOrDefault(f => f.IsDefault).Position;
             if (primaryAudioFlags is not null)
             {
@@ -485,10 +504,32 @@ public sealed class MediaConverterEngine
         }
     }
 
+    /// <summary>
+    /// The output file name <see cref="TrimNameAfter"/>, <see cref="RemoveFromName"/> and
+    /// <see cref="ReplaceInName"/> would give a source file, with its <c>.mkv</c> extension — the
+    /// renaming half of <see cref="GetPreferredOutputPath"/>, factored out so a caller that only
+    /// wants a name preview (the GUI file list, for instance) uses the exact same logic a real run
+    /// would, rather than a second implementation that could quietly drift from it. Applied in that
+    /// order — trim, then remove, then replace — so a trim or remove pattern always sees the
+    /// original punctuation rather than whatever a replace already changed it to. Invalid patterns
+    /// are not rejected here — that is <c>ValidateOptions</c>' job before a run starts — so a caller
+    /// previewing live, in-progress typing should check <see cref="FileNameTrimmer.IsValidPattern"/>
+    /// itself first if showing a result for a pattern that could never actually run would be misleading.
+    /// </summary>
+    public static string PreviewOutputFileName(
+        string fileNameWithoutExtension,
+        string? trimNameAfter,
+        IReadOnlyList<string>? removeFromName,
+        IReadOnlyList<(string Find, string ReplaceWith)>? replaceInName)
+    {
+        var trimmedName = FileNameTrimmer.Trim(fileNameWithoutExtension, trimNameAfter);
+        var removedName = FileNameStringRemover.Remove(trimmedName, removeFromName ?? []);
+        return FileNameReplacer.Replace(removedName, replaceInName ?? []) + ".mkv";
+    }
+
     private static string GetPreferredOutputPath(string inputPath, MediaConverterOptions options)
     {
-        var trimmedName = FileNameTrimmer.Trim(Path.GetFileNameWithoutExtension(inputPath), options.TrimNameAfter);
-        var outputFileName = FileNameStringRemover.Remove(trimmedName, options.RemoveFromName) + ".mkv";
+        var outputFileName = PreviewOutputFileName(Path.GetFileNameWithoutExtension(inputPath), options.TrimNameAfter, options.RemoveFromName, options.ReplaceInName);
 
         if (string.IsNullOrWhiteSpace(options.OutputPath))
         {
@@ -727,9 +768,13 @@ public sealed class MediaConverterEngine
     /// <summary>
     /// Absolute track positions (1-based, matching mkvpropedit's <c>track:N</c> addressing) of every
     /// audio track in the output, paired with whether each should become the default. Returns null
-    /// — meaning "leave mkvmerge's own default choice alone" — when there is nothing to do: no
-    /// primary language set, fewer than two audio tracks in the output, or the requested language
-    /// was not actually kept in this particular file.
+    /// — meaning "leave mkvmerge's own default choice alone" — only when there is nothing to do: no
+    /// primary language set, or the requested language was not actually kept in this particular file.
+    /// Runs even with a single surviving audio track: mkvmerge copies each kept track's own
+    /// default-track flag from the source rather than recomputing it, so if the file's *original*
+    /// default was a different, now-stripped track, the lone survivor can come out of the remux
+    /// still flagged non-default even though it is the only audio choice left. Explicitly setting the
+    /// primary-language match's flag (and clearing every other audio track's) is what fixes that.
     /// </summary>
     private static List<(int Position, bool IsDefault)>? ResolvePrimaryAudioTrackFlags(MkvInfo outputInfo, string? primaryLanguage)
     {
@@ -743,7 +788,7 @@ public sealed class MediaConverterEngine
             .Where(t => IsTrackType(t.Track, "audio"))
             .ToList();
 
-        if (audioTracks.Count < 2)
+        if (audioTracks.Count == 0)
         {
             return null;
         }
@@ -908,7 +953,7 @@ public sealed class MediaConverterEngine
 
         var surviving = GetSurvivingAudioTracks(source, languages, excludeCommentary);
         var primaryList = new[] { primaryLanguage };
-        var hasMatch = surviving.Count >= 2 && surviving.Any(t =>
+        var hasMatch = surviving.Any(t =>
             !string.IsNullOrWhiteSpace(t.Properties.Language) && LanguageCatalog.IsSelected(primaryList, t.Properties.Language!));
 
         return hasMatch
@@ -1056,6 +1101,25 @@ public sealed class MediaConverterEngine
         }
 
         return normalizedLanguages;
+    }
+
+    /// <summary>
+    /// The primary language a run actually uses: the explicit choice when there is one (already
+    /// validated to be one of <paramref name="languages"/>), otherwise English if English is itself
+    /// among the kept languages. Deliberately not a static default on <see cref="MediaConverterOptions.PrimaryLanguage"/>
+    /// itself — baking "eng" in there would fail validation outright for anyone keeping languages
+    /// that don't include English, for a default they never asked to opt into. Leaving English out
+    /// of a language selection on purpose — a foreign-only library — correctly yields no implicit
+    /// primary language, rather than guessing at some other one.
+    /// </summary>
+    private static string? ResolveEffectivePrimaryLanguage(MediaConverterOptions options, IReadOnlyList<string> languages)
+    {
+        if (!string.IsNullOrWhiteSpace(options.PrimaryLanguage))
+        {
+            return options.PrimaryLanguage.Trim();
+        }
+
+        return LanguageCatalog.IsSelected(languages, LanguageCatalog.DefaultCode) ? LanguageCatalog.DefaultCode : null;
     }
 
     private static async Task<ProcessResult> RunProcessAsync(

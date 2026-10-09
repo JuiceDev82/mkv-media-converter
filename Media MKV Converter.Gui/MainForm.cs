@@ -374,9 +374,9 @@ public partial class MainForm : Form
         var items = entries.Select(entry =>
         {
             var relativePath = Path.GetRelativePath(rootPath, entry.FullPath);
-            var displayText = entry.WillBeSkipped ? $"{relativePath}  (skip)" : relativePath;
+            var displayText = BuildFilePreviewDisplayText(relativePath, entry.WillBeSkipped);
             var isChecked = !entry.WillBeSkipped && !previouslyExcludedPaths.Contains(entry.FullPath);
-            return (Item: new FilePreviewListItem(displayText, entry.FullPath, entry.WillBeSkipped), Checked: isChecked);
+            return (Item: new FilePreviewListItem(displayText, relativePath, entry.FullPath, entry.WillBeSkipped), Checked: isChecked);
         }).ToList();
 
         SetFilePreviewItems(items);
@@ -389,6 +389,103 @@ public partial class MainForm : Form
         {
             UpdateFilePreviewSummary();
         }
+    }
+
+    /// <summary>"relativePath" normally, "relativePath  (skip)" for a skip-fragment match, or
+    /// "relativePath  (newName.mkv)" when Trim Name After / Remove From Name would actually rename
+    /// it — the three are mutually exclusive, there is no point previewing a rename for a file that
+    /// will not be processed anyway.</summary>
+    private string BuildFilePreviewDisplayText(string relativePath, bool willBeSkipped)
+    {
+        if (willBeSkipped)
+        {
+            return $"{relativePath}  (skip)";
+        }
+
+        var renamedTo = ComputeFilePreviewRenameHint(relativePath);
+        return renamedTo is null ? relativePath : $"{relativePath}  ({renamedTo})";
+    }
+
+    /// <summary>
+    /// The bare file name Trim Name After / Remove From Name / Replace In Name would currently
+    /// produce for this file, or null when there is nothing to show: all three fields are blank, the
+    /// current Trim Name After text is not a pattern that could actually run (the same check
+    /// BuildOptions() uses to block a run — showing a hint for a pattern that would be rejected at
+    /// Start would be misleading), or none of the three settings ends up changing the name for this
+    /// particular file. Comparison ignores the extension, since PreviewOutputFileName always appends
+    /// ".mkv" regardless of source format and that swap happens on every run independent of these
+    /// three settings — not what this hint is about.
+    /// </summary>
+    private string? ComputeFilePreviewRenameHint(string relativePath)
+    {
+        var trimNameAfter = txtTrimName.Text.Trim();
+        var removeFromName = FileNameStringRemover.ParsePatterns(txtRemoveFromName.Text);
+        var replaceInName = FileNameReplacer.ParsePairs(txtReplaceInName.Text);
+
+        if (trimNameAfter.Length == 0 && removeFromName.Count == 0 && replaceInName.Count == 0)
+        {
+            return null;
+        }
+
+        if (!FileNameTrimmer.IsValidPattern(trimNameAfter))
+        {
+            return null;
+        }
+
+        var originalFileName = Path.GetFileName(relativePath);
+        var nameWithoutExtension = Path.GetFileNameWithoutExtension(originalFileName);
+        var newFileName = MediaConverterEngine.PreviewOutputFileName(nameWithoutExtension, trimNameAfter, removeFromName, replaceInName);
+        var newNameWithoutExtension = Path.GetFileNameWithoutExtension(newFileName);
+
+        return string.Equals(newNameWithoutExtension, nameWithoutExtension, StringComparison.Ordinal) ? null : newFileName;
+    }
+
+    /// <summary>
+    /// Recomputes every non-skip row's rename hint in place from the current Trim Name After /
+    /// Remove From Name text, without re-scanning the folder — unlike RefreshFilePreviewAsync, this
+    /// is a pure, synchronous string computation with no file-system access, so it runs directly off
+    /// every keystroke with no debounce needed. Only rows whose hint text actually changed are
+    /// replaced; replacing CheckedListBox.Items[i] does not disturb that row's check state, since
+    /// checked-ness is tracked per index, not per object, so a manual exclusion survives untouched.
+    /// </summary>
+    private void UpdateFilePreviewNameHints()
+    {
+        _suppressFilePreviewItemCheck = true;
+        try
+        {
+            for (var i = 0; i < lstFilePreview.Items.Count; i++)
+            {
+                if (lstFilePreview.Items[i] is not FilePreviewListItem item)
+                {
+                    continue;
+                }
+
+                var displayText = BuildFilePreviewDisplayText(item.RelativePath, item.WillBeSkipped);
+                if (!string.Equals(displayText, item.DisplayText, StringComparison.Ordinal))
+                {
+                    lstFilePreview.Items[i] = item with { DisplayText = displayText };
+                }
+            }
+        }
+        finally
+        {
+            _suppressFilePreviewItemCheck = false;
+        }
+    }
+
+    private void txtTrimName_TextChanged(object? sender, EventArgs e)
+    {
+        UpdateFilePreviewNameHints();
+    }
+
+    private void txtRemoveFromName_TextChanged(object? sender, EventArgs e)
+    {
+        UpdateFilePreviewNameHints();
+    }
+
+    private void txtReplaceInName_TextChanged(object? sender, EventArgs e)
+    {
+        UpdateFilePreviewNameHints();
     }
 
     /// <summary>Full paths of files unchecked by the user — never a skip-fragment match, since those
@@ -559,6 +656,7 @@ public partial class MainForm : Form
         txtTrimEnd.Text = preset.TrimFromEnd ?? string.Empty;
         txtTrimName.Text = preset.TrimNameAfter ?? string.Empty;
         txtRemoveFromName.Text = preset.RemoveFromName ?? string.Empty;
+        txtReplaceInName.Text = preset.ReplaceInName ?? string.Empty;
     }
 
     private void btnSavePreset_Click(object? sender, EventArgs e)
@@ -612,6 +710,9 @@ public partial class MainForm : Form
             TrimFromEnd = string.IsNullOrWhiteSpace(txtTrimEnd.Text) ? null : txtTrimEnd.Text.Trim(),
             TrimNameAfter = string.IsNullOrWhiteSpace(txtTrimName.Text) ? null : txtTrimName.Text.Trim(),
             RemoveFromName = string.IsNullOrWhiteSpace(txtRemoveFromName.Text) ? null : txtRemoveFromName.Text.Trim(),
+            // Not trimmed: a trailing space can be the replacement value itself (the headline use
+            // case, "replace periods with spaces"), and trimming the whole field would silently eat it.
+            ReplaceInName = string.IsNullOrEmpty(txtReplaceInName.Text) ? null : txtReplaceInName.Text,
         };
         presets.Add(preset);
 
@@ -701,6 +802,7 @@ public partial class MainForm : Form
         }
 
         var removeFromName = FileNameStringRemover.ParsePatterns(txtRemoveFromName.Text);
+        var replaceInName = FileNameReplacer.ParsePairs(txtReplaceInName.Text);
 
         var languages = clbLanguages.CheckedItems
             .Cast<LanguageOption>()
@@ -738,6 +840,7 @@ public partial class MainForm : Form
             TrimFromEnd = trimFromEnd,
             TrimNameAfter = string.IsNullOrWhiteSpace(trimNameAfter) ? null : trimNameAfter,
             RemoveFromName = removeFromName,
+            ReplaceInName = replaceInName,
             RootPath = Path.GetFullPath(inputFolder),
             OutputPath = string.IsNullOrWhiteSpace(outputFolder) ? null : Path.GetFullPath(outputFolder),
             OverwriteExisting = chkOverwrite.Checked,
@@ -1046,6 +1149,8 @@ public partial class MainForm : Form
         lblTrimName.Enabled = !isRunning;
         txtRemoveFromName.Enabled = !isRunning;
         lblRemoveFromName.Enabled = !isRunning;
+        txtReplaceInName.Enabled = !isRunning;
+        lblReplaceInName.Enabled = !isRunning;
         UpdateSkipDirectoryState();
         if (!isRunning && progressOverall.Value == 0)
         {
@@ -1059,9 +1164,11 @@ internal sealed record LogEntry(string Text, Color? BackColor = null)
     public override string ToString() => Text;
 }
 
-/// <summary>One row in the file preview <see cref="CheckedListBox"/>, carrying the full path the
-/// checkbox actually controls alongside the (relative, possibly "(skip)"-suffixed) display text.</summary>
-internal sealed record FilePreviewListItem(string DisplayText, string FullPath, bool WillBeSkipped)
+/// <summary>One row in the file preview <see cref="CheckedListBox"/>. <see cref="RelativePath"/> is
+/// the clean path with no "(skip)"/rename-hint decoration, kept separately so
+/// <see cref="MainForm.UpdateFilePreviewNameHints"/> can recompute <see cref="DisplayText"/> from it
+/// without re-deriving it from <see cref="FullPath"/> and the current root folder each time.</summary>
+internal sealed record FilePreviewListItem(string DisplayText, string RelativePath, string FullPath, bool WillBeSkipped)
 {
     public override string ToString() => DisplayText;
 }

@@ -64,6 +64,7 @@ internal static class ProgramEntry
         var trimFromEnd = TimeSpan.Zero;
         string? trimNameAfter = null;
         var removeFromName = new List<string>();
+        var replaceInName = new List<(string Find, string ReplaceWith)>();
         var dryRun = false;
         var traverseSubfolders = true;
         var maintainFolderStructure = false;
@@ -170,6 +171,12 @@ internal static class ProgramEntry
                 continue;
             }
 
+            if (arg.Equals("--replace-in-name", StringComparison.OrdinalIgnoreCase))
+            {
+                replaceInName.AddRange(FileNameReplacer.ParsePairs(RequireValue(args, ref index, arg)));
+                continue;
+            }
+
             if (arg.Equals("--skip", StringComparison.OrdinalIgnoreCase))
             {
                 skipFragment = RequireValue(args, ref index, arg);
@@ -218,6 +225,7 @@ internal static class ProgramEntry
             TrimFromEnd = trimFromEnd,
             TrimNameAfter = trimNameAfter,
             RemoveFromName = removeFromName,
+            ReplaceInName = replaceInName,
             OutputPath = string.IsNullOrWhiteSpace(outputPath) ? null : Path.GetFullPath(outputPath),
             OverwriteExisting = true,
             TraverseSubfolders = traverseSubfolders,
@@ -260,12 +268,13 @@ internal static class ProgramEntry
         Console.WriteLine("  --mkvpropedit <path>   Path to mkvpropedit.exe");
         Console.WriteLine("  --output <path>        Optional output folder. Converted MKVs go directly there");
         Console.WriteLine("  --languages <codes>    Audio/subtitle languages to keep. Default: eng");
-        Console.WriteLine("  --primary-language <c> Audio language to flag as default when 2+ are kept. Default: none");
+        Console.WriteLine("  --primary-language <c> Audio language to flag as default. Default: eng, if kept");
         Console.WriteLine("  --include-commentary   Keep commentary-named audio tracks. Default: excluded");
         Console.WriteLine("  --parallel <n>         Process this many files at once. Default: 1 (sequential)");
         Console.WriteLine("  --trim-end <duration>  Cut this much off the end, e.g. credits. Default: none");
         Console.WriteLine("  --trim-name <pattern>  Cut the file name short after this pattern. Default: none");
         Console.WriteLine("  --remove-from-name <s> Comma-separated text to delete from the file name. Default: none");
+        Console.WriteLine("  --replace-in-name <s>  Comma-separated find=replace pairs for the file name. Default: none");
         Console.WriteLine("  --skip <fragment>      Path fragment to skip. Default: \\Processing\\");
         Console.WriteLine("  --no-subfolders        Process only the input folder itself");
         Console.WriteLine("  --maintain-structure   Recreate input subfolders under --output");
@@ -285,8 +294,10 @@ internal static class ProgramEntry
         Console.WriteLine();
         Console.WriteLine("  Any other ISO 639 code works too; the list above is just the common ones.");
         Console.WriteLine();
-        Console.WriteLine("  --primary-language must also be one of --languages. Only changes anything when a file");
-        Console.WriteLine("  keeps 2+ audio tracks; otherwise there is nothing to disambiguate.");
+        Console.WriteLine("  --primary-language must also be one of --languages. Defaults to eng when eng is kept");
+        Console.WriteLine("  and nothing else is specified; otherwise there is no implicit default. Applied even");
+        Console.WriteLine("  when only one audio track survives the remux: mkvmerge can leave that lone track");
+        Console.WriteLine("  non-default if a different, now-dropped track was the source file's own default.");
         Console.WriteLine();
         Console.WriteLine("  Commentary tracks share their language with the main track, so language selection");
         Console.WriteLine("  alone can't tell them apart. Any audio track named containing \"commentary\" is");
@@ -314,6 +325,15 @@ internal static class ProgramEntry
         Console.WriteLine();
         Console.WriteLine("    --trim-name \"S01E**\" --remove-from-name \"REPACK,PROPER\"");
         Console.WriteLine("    Show.PROPER.S01E07.1080p.x265-ELiTE.mkv  ->  Show.S01E07.mkv");
+        Console.WriteLine();
+        Console.WriteLine("  --replace-in-name takes \"find=replace\" pairs, comma-separated, applied in order after");
+        Console.WriteLine("  --trim-name and --remove-from-name. The find side is trimmed; the replace side is kept");
+        Console.WriteLine("  exactly as typed, so a trailing space survives — \".= \" (period, equals, one space)");
+        Console.WriteLine("  replaces every period with a space. No cleanup runs afterward, unlike --remove-from-name:");
+        Console.WriteLine("  a replace is a precise substitution, not something that leaves debris to tidy up.");
+        Console.WriteLine();
+        Console.WriteLine("    --replace-in-name \".= ,_= \"");
+        Console.WriteLine("    Show.Name_2026.S01E07.mkv  ->  Show Name 2026 S01E07.mkv");
         Console.WriteLine();
         Console.WriteLine("Example:");
         Console.WriteLine(@"  MediaMkvConverter ""D:\Videos\Movies"" --output ""E:\Converted"" --languages eng,fre");

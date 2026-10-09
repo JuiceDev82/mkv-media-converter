@@ -39,7 +39,9 @@ Two rules apply on every language selection:
 
 ### Primary audio language
 
-If you keep more than one audio track, `--primary-language <code>` (console) or **Settings → Primary Language** (GUI) picks which one auto-selects on playback, overriding mkvmerge's own default (whichever kept track happened to come first in the source). It must also be one of your selected languages. On a file that only ends up keeping one audio track there's nothing to disambiguate, so it does nothing there.
+`--primary-language <code>` (console) or **Settings → Primary Language** (GUI) picks which kept audio track auto-selects on playback. **Defaults to `eng`** whenever English is among the languages you're keeping and you haven't typed anything else; leave it blank to get that default, or type a different code to override it. It must be one of your selected languages — picking `fre` while only keeping `eng,jpn` is refused up front. If English isn't one of your kept languages and you didn't set anything, there's no implicit default.
+
+This still applies with only one audio track surviving the remux, which matters more than it sounds: mkvmerge copies each kept track's own default-track flag from the *source* rather than recomputing it, so if the original file's default was a different track that got dropped (foreign-default source with the video, say), the lone remaining track can come out of the remux still flagged non-default even though it's the only audio there is. This setting corrects that explicitly, so the language you asked to keep is always the one that plays automatically.
 
 ### Commentary tracks
 
@@ -100,15 +102,42 @@ Show Title - S01E08.mkv                   ->  unchanged, nothing matched
 
 Whatever dots, dashes or spaces the removal leaves stranded next to each other are collapsed to one, and trimmed from both ends — but only on a name a removal actually touched. A file where nothing matched is left **byte-for-byte** untouched, so an existing `" - "` or similar in your naming style is never disturbed by files that had no reason to change. As with trim-name, a removal that would empty the name is refused in favor of the original, and the same collision guard applies — two names that reduce to the same result leave the second file's source alone and reported as a failure.
 
+### Replacing characters in the name
+
+Removal only ever deletes. To swap one piece of text for another — the common case being punctuation, like turning dots into spaces for readability — give `--replace-in-name` (console) or **Settings → Replace In Name** (GUI) comma-separated `find=replace` pairs. Each pair is applied in order, case-insensitively, *after* both `--trim-name` and `--remove-from-name`:
+
+```powershell
+MediaMkvConverter "D:\Videos\Show" --replace-in-name ".= "
+```
+
+```
+Lanterns.2026.S01E07.1080p.x265-ELiTE.mkv   ->  Lanterns 2026 S01E07 1080p x265-ELiTE.mkv
+```
+
+**The text after `=` is kept exactly as typed — including a trailing space — all the way through.** The example above is literally "period, equals sign, one space": that trailing space is invisible in a text box, but it's what makes "replace periods with spaces" work, and nothing in this app ever trims it away (not the live preview, not a saved preset). The text *before* `=` is trimmed, so visual spacing around pairs or commas doesn't break matching — `.= , _= ` parses the same as `.= ,_= `.
+
+Unlike `--remove-from-name`, nothing gets tidied up afterward. A replace is an exact substitution you asked for — including when the replacement is itself a separator — so there's no deletion debris to clean up the way there is after removing text outright. The only safety net is the same one every name setting has: a replacement that would empty the name out entirely is refused in favor of the original.
+
+Multiple pairs run in sequence, so `.= ,_= ` turns both dots and underscores into spaces. Because the preview list (below) shows the real result live, confirming a space actually landed where you meant it to is a glance away rather than a guess.
+
 > **In-place mode deletes the original before moving the remuxed file into place.** A crash in that window loses the source file. Use `--output` (or `--dry-run` first) if that matters to you.
 
 ## Presets (GUI)
 
-The **Preset** dropdown at the top of Settings saves and restores the "what kind of show is this" fields in one step: languages, primary language, commentary exclusion, and all three name/trim settings. **Save As...** names and stores the current values (`%AppData%\MediaMkvConverter\presets.json`); picking a preset from the list applies it immediately; **Delete** removes the selected one. Deliberately left out: folder paths, the skip fragment, tool paths, and the overwrite/dry-run/maintain-structure/parallel-files toggles — those describe how *this run* behaves, not what kind of content it is, so they stay with the current session rather than being saved into a reusable profile.
+The **Preset** dropdown at the top of Settings saves and restores the "what kind of show is this" fields in one step: languages, primary language, commentary exclusion, and all four name/trim settings (including Replace In Name — a saved preset preserves a trailing-space replacement exactly, the same as typing it fresh). **Save As...** names and stores the current values (`%AppData%\MediaMkvConverter\presets.json`); picking a preset from the list applies it immediately; **Delete** removes the selected one. Deliberately left out: folder paths, the skip fragment, tool paths, and the overwrite/dry-run/maintain-structure/parallel-files toggles — those describe how *this run* behaves, not what kind of content it is, so they stay with the current session rather than being saved into a reusable profile.
 
 ## Selecting files to process (GUI)
 
 Every entry in **Files To Process** has its own checkbox — uncheck one to leave it out of the run without moving it out of the folder or touching the skip fragment. A file already excluded by the skip fragment shows its checkbox locked unchecked, since that rule is meant to be unconditional; toggling it there does nothing. Unchecked files survive a live refresh (the folder watcher picking up an unrelated change elsewhere) by full path, so they don't silently get reselected out from under you.
+
+Typing into **Trim Name After**, **Remove From Name**, or **Replace In Name** updates the list live: a file any of the three would actually rename shows its new name in parentheses right next to it —
+
+```
+Lanterns.2026.S01E07.1080p.x265-ELiTE.mkv  (Lanterns 2026 S01E07 1080p x265-ELiTE.mkv)
+Movie.2024.1080p.BluRay-GRP.mkv
+```
+
+— so you can see the effect of a pattern before running anything, not just after, and (for Replace In Name especially) confirm that a trailing space you can't actually see in the text box landed where you meant it to. A file none of the three settings touches shows no parenthetical at all, and a skip-fragment match shows `(skip)` instead, never both. While Trim Name After holds something `IsValidPattern` would reject outright (`***`, say), no hint is shown for *any* file — that pattern would be refused at Start, so a preview of what it would otherwise have done would be misleading.
 
 ## Parallel processing
 
@@ -143,11 +172,12 @@ MediaMkvConverter <rootPath> [options]
   --mkvpropedit <path>   Path to mkvpropedit.exe
   --output <path>        Optional output folder. Converted MKVs go directly there
   --languages <codes>    Audio/subtitle languages to keep. Default: eng
-  --primary-language <c> Audio language to flag as default when 2+ are kept. Default: none
+  --primary-language <c> Audio language to flag as default. Default: eng, if kept
   --include-commentary   Keep commentary-named audio tracks. Default: excluded
   --trim-end <duration>  Cut this much off the end, e.g. credits. Default: none
   --trim-name <pattern>  Cut the file name short after this pattern. Default: none
   --remove-from-name <s> Comma-separated text to delete from the file name. Default: none
+  --replace-in-name <s>  Comma-separated find=replace pairs for the file name. Default: none
   --parallel <n>         Process this many files at once. Default: 1 (sequential)
   --skip <fragment>      Path fragment to skip. Default: \Processing\
   --no-subfolders        Process only the input folder itself
@@ -162,7 +192,7 @@ Any file whose path contains the skip fragment (`\Processing\` by default) is pa
 
 ## GUI
 
-`Media MKV Converter.Gui` is a WinForms shell over the same engine: input and output folder pickers, a preset picker, the tool paths, the skip fragment, the language checkboxes, the primary-language, trim-from-end, trim-name and remove-from-name fields, a Parallel Files spinner, and toggles for subfolder traversal, folder-structure mirroring, overwrite, dry-run, and commentary exclusion. Progress lines are colour-coded by event kind.
+`Media MKV Converter.Gui` is a WinForms shell over the same engine: input and output folder pickers, a preset picker, the tool paths, the skip fragment, the language checkboxes, the primary-language, trim-from-end, trim-name, remove-from-name and replace-in-name fields, a Parallel Files spinner, and toggles for subfolder traversal, folder-structure mirroring, overwrite, dry-run, and commentary exclusion. Progress lines are colour-coded by event kind.
 
 `AppIcon.ico` (a generated play-badge icon) is embedded into the exe via `<ApplicationIcon>` and re-applied to the running window at startup — see `MainForm.ApplyApplicationIcon`. To use your own icon instead, replace the file and keep the name, or update `<ApplicationIcon>` in the `.csproj` to point at a different one.
 
