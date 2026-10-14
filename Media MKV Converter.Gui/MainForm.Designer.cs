@@ -809,7 +809,7 @@ partial class MainForm
         numParallelFiles.Name = "numParallelFiles";
         numParallelFiles.Size = new Size(50, 23);
         numParallelFiles.TabIndex = 6;
-        numParallelFiles.Value = new decimal(new int[] { 1, 0, 0, 0 });
+        numParallelFiles.Value = new decimal(new int[] { 2, 0, 0, 0 });
         //
         // progressOverall
         // 

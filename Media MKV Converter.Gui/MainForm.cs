@@ -10,6 +10,11 @@ public partial class MainForm : Form
     private static readonly Color SummaryLineColor = Color.FromArgb(183, 225, 183);
     private static readonly Color ErrorLineColor = Color.FromArgb(255, 220, 220);
 
+    /// <summary>The one preset name that auto-loads on every startup instead of leaving the picker
+    /// blank, so saving over it is the normal "make this the new default" workflow — every other
+    /// preset still has to be picked by hand.</summary>
+    private const string DefaultPresetName = "Default";
+
     private CancellationTokenSource? _runCancellation;
     private int _successCount;
     private int _skipCount;
@@ -46,8 +51,13 @@ public partial class MainForm : Form
         FormClosed += (_, _) => _filePreviewWatcher.Dispose();
 
         txtInputFolder.Text = Environment.CurrentDirectory.TrimEnd(Path.DirectorySeparatorChar, Path.AltDirectorySeparatorChar);
-        txtMkvMerge.Text = new MediaConverterOptions().MkvMergePath;
-        txtMkvPropEdit.Text = new MediaConverterOptions().MkvPropEditPath;
+
+        var savedToolPaths = ToolPathSettingsStore.Load();
+        txtMkvMerge.Text = savedToolPaths.MkvMergePath ?? string.Empty;
+        txtMkvPropEdit.Text = savedToolPaths.MkvPropEditPath ?? string.Empty;
+        txtMkvMerge.Leave += (_, _) => SaveToolPaths();
+        txtMkvPropEdit.Leave += (_, _) => SaveToolPaths();
+
         txtSkip.Text = @"\Processing\";
         chkOverwrite.Checked = true;
         chkTraverseSubfolders.Checked = true;
@@ -55,6 +65,7 @@ public partial class MainForm : Form
         chkExcludeCommentary.Checked = true;
         PopulateLanguages();
         PopulatePresetList();
+        SelectDefaultPresetOnStartup();
         SetAdvancedVisibility(false);
         UpdateRunningState(false);
         UpdateSkipDirectoryState();
@@ -631,6 +642,76 @@ public partial class MainForm : Form
         btnDeletePreset.Enabled = cboPreset.SelectedItem is not null;
     }
 
+    /// <summary>Called once at startup, after <see cref="PopulatePresetList"/>. If a preset named
+    /// "Default" has been saved, selects it — which fires <see cref="cboPreset_SelectedIndexChanged"/>
+    /// and applies it, same as picking it by hand. If one hasn't been saved yet, this is a no-op and
+    /// the picker starts blank as before, since there's nothing to load.</summary>
+    private void SelectDefaultPresetOnStartup()
+    {
+        var defaultPreset = cboPreset.Items.Cast<ConversionPreset>()
+            .FirstOrDefault(p => string.Equals(p.Name, DefaultPresetName, StringComparison.OrdinalIgnoreCase));
+
+        // First-ever launch, or the saved "Default" preset was deleted: create one from whatever
+        // the form's own hardcoded startup values are (set earlier in the constructor), so there's
+        // always a real "Default" to show and build on, rather than requiring a manual Save first.
+        if (defaultPreset is null)
+        {
+            defaultPreset = BuildPresetFromCurrentFields(DefaultPresetName);
+            if (defaultPreset is not null)
+            {
+                var presets = PresetStore.Load();
+                presets.Add(defaultPreset);
+                try
+                {
+                    PresetStore.Save(presets);
+                }
+                catch (Exception)
+                {
+                    // Best-effort, same as ToolPathSettingsStore: a transient I/O error here just
+                    // means the picker re-attempts this on the next launch instead of surfacing
+                    // a dialog for something the user didn't explicitly ask to happen.
+                    return;
+                }
+
+                PopulatePresetList();
+                defaultPreset = cboPreset.Items.Cast<ConversionPreset>()
+                    .FirstOrDefault(p => string.Equals(p.Name, DefaultPresetName, StringComparison.OrdinalIgnoreCase));
+            }
+        }
+
+        if (defaultPreset is not null)
+        {
+            cboPreset.SelectedItem = defaultPreset;
+        }
+    }
+
+    /// <summary>Builds a <see cref="ConversionPreset"/> from the current state of every field a
+    /// preset covers. Shared by the explicit Save button and the first-launch auto-create of
+    /// "Default", so the two can never map fields differently. Returns null when no language is
+    /// checked — a preset with no languages would fail <c>BuildOptions</c>' own validation anyway.</summary>
+    private ConversionPreset? BuildPresetFromCurrentFields(string name)
+    {
+        var languages = clbLanguages.CheckedItems.Cast<LanguageOption>().Select(option => option.Code).ToList();
+        if (languages.Count == 0)
+        {
+            return null;
+        }
+
+        return new ConversionPreset
+        {
+            Name = name,
+            Languages = languages,
+            PrimaryLanguage = string.IsNullOrWhiteSpace(txtPrimaryLanguage.Text) ? null : txtPrimaryLanguage.Text.Trim(),
+            ExcludeCommentaryTracks = chkExcludeCommentary.Checked,
+            TrimFromEnd = string.IsNullOrWhiteSpace(txtTrimEnd.Text) ? null : txtTrimEnd.Text.Trim(),
+            TrimNameAfter = string.IsNullOrWhiteSpace(txtTrimName.Text) ? null : txtTrimName.Text.Trim(),
+            RemoveFromName = string.IsNullOrWhiteSpace(txtRemoveFromName.Text) ? null : txtRemoveFromName.Text.Trim(),
+            // Not trimmed: a trailing space can be the replacement value itself (the headline use
+            // case, "replace periods with spaces"), and trimming the whole field would silently eat it.
+            ReplaceInName = string.IsNullOrEmpty(txtReplaceInName.Text) ? null : txtReplaceInName.Text,
+        };
+    }
+
     private void cboPreset_SelectedIndexChanged(object? sender, EventArgs e)
     {
         btnDeletePreset.Enabled = cboPreset.SelectedItem is not null;
@@ -694,26 +775,12 @@ public partial class MainForm : Form
             presets.Remove(existing);
         }
 
-        var languages = clbLanguages.CheckedItems.Cast<LanguageOption>().Select(option => option.Code).ToList();
-        if (languages.Count == 0)
+        var preset = BuildPresetFromCurrentFields(name);
+        if (preset is null)
         {
             MessageBox.Show(this, "Select at least one language before saving a preset.", "Save Preset", MessageBoxButtons.OK, MessageBoxIcon.Warning);
             return;
         }
-
-        var preset = new ConversionPreset
-        {
-            Name = name,
-            Languages = languages,
-            PrimaryLanguage = string.IsNullOrWhiteSpace(txtPrimaryLanguage.Text) ? null : txtPrimaryLanguage.Text.Trim(),
-            ExcludeCommentaryTracks = chkExcludeCommentary.Checked,
-            TrimFromEnd = string.IsNullOrWhiteSpace(txtTrimEnd.Text) ? null : txtTrimEnd.Text.Trim(),
-            TrimNameAfter = string.IsNullOrWhiteSpace(txtTrimName.Text) ? null : txtTrimName.Text.Trim(),
-            RemoveFromName = string.IsNullOrWhiteSpace(txtRemoveFromName.Text) ? null : txtRemoveFromName.Text.Trim(),
-            // Not trimmed: a trailing space can be the replacement value itself (the headline use
-            // case, "replace periods with spaces"), and trimming the whole field would silently eat it.
-            ReplaceInName = string.IsNullOrEmpty(txtReplaceInName.Text) ? null : txtReplaceInName.Text,
-        };
         presets.Add(preset);
 
         try
@@ -1076,7 +1143,17 @@ public partial class MainForm : Form
         if (dialog.ShowDialog(this) == DialogResult.OK)
         {
             targetTextBox.Text = dialog.FileName;
+            SaveToolPaths();
         }
+    }
+
+    private void SaveToolPaths()
+    {
+        ToolPathSettingsStore.Save(new ToolPathSettings
+        {
+            MkvMergePath = string.IsNullOrWhiteSpace(txtMkvMerge.Text) ? null : txtMkvMerge.Text.Trim(),
+            MkvPropEditPath = string.IsNullOrWhiteSpace(txtMkvPropEdit.Text) ? null : txtMkvPropEdit.Text.Trim(),
+        });
     }
 
     private static string GetInitialDirectory(string path)

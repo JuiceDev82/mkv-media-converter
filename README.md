@@ -126,6 +126,12 @@ Multiple pairs run in sequence, so `.= ,_= ` turns both dots and underscores int
 
 The **Preset** dropdown at the top of Settings saves and restores the "what kind of show is this" fields in one step: languages, primary language, commentary exclusion, and all four name/trim settings (including Replace In Name — a saved preset preserves a trailing-space replacement exactly, the same as typing it fresh). **Save As...** names and stores the current values (`%AppData%\MediaMkvConverter\presets.json`); picking a preset from the list applies it immediately; **Delete** removes the selected one. Deliberately left out: folder paths, the skip fragment, tool paths, and the overwrite/dry-run/maintain-structure/parallel-files toggles — those describe how *this run* behaves, not what kind of content it is, so they stay with the current session rather than being saved into a reusable profile.
 
+A preset named exactly **Default** is special: it's selected and applied automatically every time the app opens, instead of the picker starting blank. The very first time you run the app (or any time "Default" doesn't exist — say you deleted it), one is created automatically from the form's own starting values and saved, so there's always a real "Default" to load and build on. From then on, saving over it (pick **Save As...**, keep the name `Default`, confirm the overwrite) is the normal way to change what loads next time — every other preset still has to be picked by hand, same as before.
+
+## Tool paths (GUI)
+
+The GUI's **mkvmerge.exe**/**mkvpropedit.exe** fields start blank on a machine that's never run it, rather than guessing `%LOCALAPPDATA%\mkvtoolnix\...` the way the console default does — a guessed path that happens to not exist is worse than an obviously-empty field. Whatever you point them at is remembered automatically (on Browse, and when you click or tab out of either box after typing) at `%AppData%\MediaMkvConverter\toolpaths.json`, separate from presets — tool paths describe this machine, not a kind of content, so they're excluded from presets for the same reason the skip fragment and folder paths are (see above), but still worth remembering across restarts since they don't normally change.
+
 ## Selecting files to process (GUI)
 
 Every entry in **Files To Process** has its own checkbox — uncheck one to leave it out of the run without moving it out of the folder or touching the skip fragment. A file already excluded by the skip fragment shows its checkbox locked unchecked, since that rule is meant to be unconditional; toggling it there does nothing. Unchecked files survive a live refresh (the folder watcher picking up an unrelated change elsewhere) by full path, so they don't silently get reselected out from under you.
@@ -141,7 +147,7 @@ Movie.2024.1080p.BluRay-GRP.mkv
 
 ## Parallel processing
 
-By default files are processed one at a time. `--parallel <n>` (console) or the **Parallel Files** spinner (GUI) raises that; try 2–4 and see what your disk can take — remuxing is I/O-bound, so a spinning HDD may get *slower*, not faster, with more than one file writing to it at once. Correctness doesn't change: the same collision guard, audio and duration safety checks apply regardless of how many files run at once. Two things do change above 1:
+By default files are processed one at a time on the console (`--parallel <n>` raises that); the GUI's **Parallel Files** spinner defaults to 2 instead, since that's a safe starting point for most setups. Try 2–4 and see what your disk can take — remuxing is I/O-bound, so a spinning HDD may get *slower*, not faster, with more than one file writing to it at once. Correctness doesn't change: the same collision guard, audio and duration safety checks apply regardless of how many files run at once. Two things do change above 1:
 
 - **Log lines interleave.** Every stage line names its own file (`[Show.S01E07.mkv] -> remux (25%)`), so the log stays readable, just no longer strictly one file at a time top to bottom.
 - **A same-run naming collision is decided by timing, not alphabetical order.** Sequentially, the first file alphabetically always wins a collision. In parallel, whichever file's inspect stage happens to finish first wins — still exactly one winner, the rest still refused and reported as failures, just no longer predictable in advance.
@@ -149,7 +155,7 @@ By default files are processed one at a time. `--parallel <n>` (console) or the 
 ## Requirements
 
 - [.NET 9 SDK](https://dotnet.microsoft.com/download) or newer to build (a newer SDK builds the `net9.0` targets fine).
-- MKVToolNix — `mkvmerge.exe` and `mkvpropedit.exe`. Both default to `%LOCALAPPDATA%\mkvtoolnix\` and are validated before a run starts; point at them explicitly if yours live elsewhere.
+- MKVToolNix — `mkvmerge.exe` and `mkvpropedit.exe`. The console defaults to `%LOCALAPPDATA%\mkvtoolnix\`; the GUI starts blank and remembers whatever you last pointed it at instead (see [Tool paths (GUI)](#tool-paths-gui)). Both are validated before a run starts.
 - Windows for the GUI (WinForms). The core engine and console front end target `net9.0`.
 
 ## Build
