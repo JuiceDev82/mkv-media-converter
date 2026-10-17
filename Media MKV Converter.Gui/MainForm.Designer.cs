@@ -50,12 +50,10 @@ partial class MainForm
     private Button btnSavePreset;
     private Button btnDeletePreset;
     private FlowLayoutPanel panelAdvancedOptions;
-    private Label lblMkvMerge;
-    private TextBox txtMkvMerge;
-    private Button btnBrowseMkvMerge;
-    private Label lblMkvPropEdit;
-    private TextBox txtMkvPropEdit;
-    private Button btnBrowseMkvPropEdit;
+    private Label lblMkvToolNixFolder;
+    private TextBox txtMkvToolNixFolder;
+    private Button btnBrowseMkvToolNixFolder;
+    private CheckBox chkVerifyInMkvToolNix;
     private ProgressBar progressOverall;
     private Label lblProgressPercent;
     private Label lblCurrent;
@@ -134,12 +132,10 @@ partial class MainForm
         btnSavePreset = new Button();
         btnDeletePreset = new Button();
         panelAdvancedOptions = new FlowLayoutPanel();
-        lblMkvMerge = new Label();
-        txtMkvMerge = new TextBox();
-        btnBrowseMkvMerge = new Button();
-        lblMkvPropEdit = new Label();
-        txtMkvPropEdit = new TextBox();
-        btnBrowseMkvPropEdit = new Button();
+        lblMkvToolNixFolder = new Label();
+        txtMkvToolNixFolder = new TextBox();
+        btnBrowseMkvToolNixFolder = new Button();
+        chkVerifyInMkvToolNix = new CheckBox();
         progressOverall = new ProgressBar();
         lblProgressPercent = new Label();
         lblCurrent = new Label();
@@ -421,12 +417,10 @@ partial class MainForm
         layoutAdvanced.ColumnStyles.Add(new ColumnStyle(SizeType.Absolute, 100F));
         layoutAdvanced.Controls.Add(lblPreset, 0, 0);
         layoutAdvanced.Controls.Add(panelPreset, 1, 0);
-        layoutAdvanced.Controls.Add(lblMkvMerge, 0, 1);
-        layoutAdvanced.Controls.Add(txtMkvMerge, 1, 1);
-        layoutAdvanced.Controls.Add(btnBrowseMkvMerge, 2, 1);
-        layoutAdvanced.Controls.Add(lblMkvPropEdit, 0, 2);
-        layoutAdvanced.Controls.Add(txtMkvPropEdit, 1, 2);
-        layoutAdvanced.Controls.Add(btnBrowseMkvPropEdit, 2, 2);
+        layoutAdvanced.Controls.Add(lblMkvToolNixFolder, 0, 1);
+        layoutAdvanced.Controls.Add(txtMkvToolNixFolder, 1, 1);
+        layoutAdvanced.Controls.Add(btnBrowseMkvToolNixFolder, 2, 1);
+        layoutAdvanced.Controls.Add(chkVerifyInMkvToolNix, 1, 2);
         layoutAdvanced.Controls.Add(lblSkip, 0, 3);
         layoutAdvanced.Controls.Add(txtSkip, 1, 3);
         layoutAdvanced.Controls.Add(lblLanguages, 0, 4);
@@ -462,9 +456,10 @@ partial class MainForm
         layoutAdvanced.SetColumnSpan(panelPreset, 2);
         layoutAdvanced.SetColumnSpan(panelAdvancedOptions, 2);
         layoutAdvanced.SetColumnSpan(clbLanguages, 2);
-        // 
+        layoutAdvanced.SetColumnSpan(chkVerifyInMkvToolNix, 2);
+        //
         // panelAdvancedOptions
-        // 
+        //
         panelAdvancedOptions.Controls.Add(chkOverwrite);
         panelAdvancedOptions.Controls.Add(chkDryRun);
         panelAdvancedOptions.Controls.Add(chkTraverseSubfolders);
@@ -528,81 +523,64 @@ partial class MainForm
         btnDeletePreset.UseVisualStyleBackColor = true;
         btnDeletePreset.Click += btnDeletePreset_Click;
         //
-        // lblMkvMerge
-        // 
-        lblMkvMerge.Anchor = AnchorStyles.Left;
-        lblMkvMerge.AutoSize = true;
-        lblMkvMerge.Location = new Point(3, 9);
-        lblMkvMerge.Name = "lblMkvMerge";
-        lblMkvMerge.Size = new Size(83, 15);
-        lblMkvMerge.TabIndex = 0;
-        lblMkvMerge.Text = "mkvmerge.exe";
-        // 
-        // txtMkvMerge
-        // 
-        txtMkvMerge.Anchor = AnchorStyles.Left | AnchorStyles.Right;
-        txtMkvMerge.Location = new Point(118, 5);
-        txtMkvMerge.Name = "txtMkvMerge";
-        txtMkvMerge.Size = new Size(833, 23);
-        txtMkvMerge.TabIndex = 1;
-        // 
-        // btnBrowseMkvMerge
-        // 
-        btnBrowseMkvMerge.Anchor = AnchorStyles.Left | AnchorStyles.Right;
-        btnBrowseMkvMerge.Location = new Point(957, 4);
-        btnBrowseMkvMerge.Name = "btnBrowseMkvMerge";
-        btnBrowseMkvMerge.Size = new Size(94, 25);
-        btnBrowseMkvMerge.TabIndex = 2;
-        btnBrowseMkvMerge.Text = "Browse...";
-        btnBrowseMkvMerge.UseVisualStyleBackColor = true;
-        btnBrowseMkvMerge.Click += btnBrowseMkvMerge_Click;
-        // 
-        // lblMkvPropEdit
-        // 
-        lblMkvPropEdit.Anchor = AnchorStyles.Left;
-        lblMkvPropEdit.AutoSize = true;
-        lblMkvPropEdit.Location = new Point(3, 43);
-        lblMkvPropEdit.Name = "lblMkvPropEdit";
-        lblMkvPropEdit.Size = new Size(90, 15);
-        lblMkvPropEdit.TabIndex = 3;
-        lblMkvPropEdit.Text = "mkvpropedit.exe";
-        // 
-        // txtMkvPropEdit
-        // 
-        txtMkvPropEdit.Anchor = AnchorStyles.Left | AnchorStyles.Right;
-        txtMkvPropEdit.Location = new Point(118, 39);
-        txtMkvPropEdit.Name = "txtMkvPropEdit";
-        txtMkvPropEdit.Size = new Size(833, 23);
-        txtMkvPropEdit.TabIndex = 4;
-        // 
-        // btnBrowseMkvPropEdit
-        // 
-        btnBrowseMkvPropEdit.Anchor = AnchorStyles.Left | AnchorStyles.Right;
-        btnBrowseMkvPropEdit.Location = new Point(957, 38);
-        btnBrowseMkvPropEdit.Name = "btnBrowseMkvPropEdit";
-        btnBrowseMkvPropEdit.Size = new Size(94, 25);
-        btnBrowseMkvPropEdit.TabIndex = 5;
-        btnBrowseMkvPropEdit.Text = "Browse...";
-        btnBrowseMkvPropEdit.UseVisualStyleBackColor = true;
-        btnBrowseMkvPropEdit.Click += btnBrowseMkvPropEdit_Click;
-        // 
+        // lblMkvToolNixFolder
+        //
+        lblMkvToolNixFolder.Anchor = AnchorStyles.Left;
+        lblMkvToolNixFolder.AutoSize = true;
+        lblMkvToolNixFolder.Location = new Point(3, 9);
+        lblMkvToolNixFolder.Name = "lblMkvToolNixFolder";
+        lblMkvToolNixFolder.Size = new Size(97, 15);
+        lblMkvToolNixFolder.TabIndex = 0;
+        lblMkvToolNixFolder.Text = "MKVToolNix Folder";
+        //
+        // txtMkvToolNixFolder
+        //
+        txtMkvToolNixFolder.Anchor = AnchorStyles.Left | AnchorStyles.Right;
+        txtMkvToolNixFolder.Location = new Point(118, 5);
+        txtMkvToolNixFolder.Name = "txtMkvToolNixFolder";
+        txtMkvToolNixFolder.PlaceholderText = @"e.g. C:\Program Files\MKVToolNix";
+        txtMkvToolNixFolder.Size = new Size(833, 23);
+        txtMkvToolNixFolder.TabIndex = 1;
+        //
+        // btnBrowseMkvToolNixFolder
+        //
+        btnBrowseMkvToolNixFolder.Anchor = AnchorStyles.Left | AnchorStyles.Right;
+        btnBrowseMkvToolNixFolder.Location = new Point(957, 4);
+        btnBrowseMkvToolNixFolder.Name = "btnBrowseMkvToolNixFolder";
+        btnBrowseMkvToolNixFolder.Size = new Size(94, 25);
+        btnBrowseMkvToolNixFolder.TabIndex = 2;
+        btnBrowseMkvToolNixFolder.Text = "Browse...";
+        btnBrowseMkvToolNixFolder.UseVisualStyleBackColor = true;
+        btnBrowseMkvToolNixFolder.Click += btnBrowseMkvToolNixFolder_Click;
+        //
+        // chkVerifyInMkvToolNix
+        //
+        chkVerifyInMkvToolNix.Anchor = AnchorStyles.Left;
+        chkVerifyInMkvToolNix.AutoSize = true;
+        chkVerifyInMkvToolNix.Location = new Point(118, 39);
+        chkVerifyInMkvToolNix.Name = "chkVerifyInMkvToolNix";
+        chkVerifyInMkvToolNix.Size = new Size(140, 19);
+        chkVerifyInMkvToolNix.TabIndex = 3;
+        chkVerifyInMkvToolNix.Text = "Verify In MKVToolNix";
+        chkVerifyInMkvToolNix.UseVisualStyleBackColor = true;
+        //
         // lblSkip
-        // 
+        //
         lblSkip.Anchor = AnchorStyles.Left;
         lblSkip.AutoSize = true;
-        lblSkip.Location = new Point(3, 77);
+        lblSkip.Location = new Point(3, 43);
         lblSkip.Name = "lblSkip";
         lblSkip.Size = new Size(82, 15);
-        lblSkip.TabIndex = 6;
+        lblSkip.TabIndex = 3;
         lblSkip.Text = "Skip Directory";
-        // 
+        //
         // txtSkip
-        // 
+        //
         txtSkip.Anchor = AnchorStyles.Left | AnchorStyles.Right;
-        txtSkip.Location = new Point(118, 73);
+        txtSkip.Location = new Point(118, 39);
         txtSkip.Name = "txtSkip";
         txtSkip.Size = new Size(833, 23);
-        txtSkip.TabIndex = 7;
+        txtSkip.TabIndex = 4;
         txtSkip.TextChanged += txtSkip_TextChanged;
         //
         // lblLanguages

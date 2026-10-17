@@ -56,6 +56,8 @@ internal static class ProgramEntry
         string? rootPath = null;
         string? mkvMergePath = null;
         string? mkvPropEditPath = null;
+        string? mkvToolNixGuiPath = null;
+        var openInMkvToolNixGui = false;
         var skipFragment = @"\Processing\";
         string? outputPath = null;
         var languages = new List<string>();
@@ -108,6 +110,18 @@ internal static class ProgramEntry
             if (arg.Equals("--mkvpropedit", StringComparison.OrdinalIgnoreCase))
             {
                 mkvPropEditPath = RequireValue(args, ref index, arg);
+                continue;
+            }
+
+            if (arg.Equals("--mkvtoolnix-gui", StringComparison.OrdinalIgnoreCase))
+            {
+                mkvToolNixGuiPath = RequireValue(args, ref index, arg);
+                continue;
+            }
+
+            if (arg.Equals("--open-in-mkvtoolnix-gui", StringComparison.OrdinalIgnoreCase))
+            {
+                openInMkvToolNixGui = true;
                 continue;
             }
 
@@ -217,6 +231,8 @@ internal static class ProgramEntry
             RootPath = Path.GetFullPath(rootPath),
             MkvMergePath = mkvMergePath is null ? new MediaConverterOptions().MkvMergePath : Path.GetFullPath(mkvMergePath),
             MkvPropEditPath = mkvPropEditPath is null ? new MediaConverterOptions().MkvPropEditPath : Path.GetFullPath(mkvPropEditPath),
+            MkvToolNixGuiPath = mkvToolNixGuiPath is null ? new MediaConverterOptions().MkvToolNixGuiPath : Path.GetFullPath(mkvToolNixGuiPath),
+            OpenInMkvToolNixGui = openInMkvToolNixGui,
             SkipFragment = skipFragment,
             Languages = languages.Count == 0 ? [LanguageCatalog.DefaultCode] : languages,
             PrimaryLanguage = primaryLanguage,
@@ -266,6 +282,8 @@ internal static class ProgramEntry
         Console.WriteLine("Options:");
         Console.WriteLine("  --mkvmerge <path>      Path to mkvmerge.exe");
         Console.WriteLine("  --mkvpropedit <path>   Path to mkvpropedit.exe");
+        Console.WriteLine("  --mkvtoolnix-gui <p>   Path to mkvtoolnix-gui.exe, used with --open-in-mkvtoolnix-gui");
+        Console.WriteLine("  --open-in-mkvtoolnix-gui  Open each file's original and finished output in MKVToolNix's GUI");
         Console.WriteLine("  --output <path>        Optional output folder. Converted MKVs go directly there");
         Console.WriteLine("  --languages <codes>    Audio/subtitle languages to keep. Default: eng");
         Console.WriteLine("  --primary-language <c> Audio language to flag as default. Default: eng, if kept");

@@ -130,7 +130,9 @@ A preset named exactly **Default** is special: it's selected and applied automat
 
 ## Tool paths (GUI)
 
-The GUI's **mkvmerge.exe**/**mkvpropedit.exe** fields start blank on a machine that's never run it, rather than guessing `%LOCALAPPDATA%\mkvtoolnix\...` the way the console default does — a guessed path that happens to not exist is worse than an obviously-empty field. Whatever you point them at is remembered automatically (on Browse, and when you click or tab out of either box after typing) at `%AppData%\MediaMkvConverter\toolpaths.json`, separate from presets — tool paths describe this machine, not a kind of content, so they're excluded from presets for the same reason the skip fragment and folder paths are (see above), but still worth remembering across restarts since they don't normally change.
+The GUI asks for one thing — the **MKVToolNix Folder** — instead of separate paths for each tool, since `mkvmerge.exe`, `mkvpropedit.exe`, and `mkvtoolnix-gui.exe` all live together in a normal install (e.g. `C:\Program Files\MKVToolNix`). It starts blank on a machine that's never run it, rather than guessing a path the way the console default does — a guessed path that happens to not exist is worse than an obviously-empty field. Whatever folder you point it at is remembered automatically (on Browse, and when you click or tab out of the box after typing) at `%AppData%\MediaMkvConverter\toolpaths.json`, separate from presets — tool paths describe this machine, not a kind of content, so they're excluded from presets for the same reason the skip fragment and folder paths are (see above), but still worth remembering across restarts since it doesn't normally change.
+
+**Verify In MKVToolNix** (right below the folder) opens each file's original, then its finished output, in MKVToolNix's own GUI (`mkvtoolnix-gui.exe`, from that same folder) as the run goes — a quick side-by-side look without hunting for the files afterward. The original opens first, as soon as its remux succeeds and before anything is deleted; the finished output opens afterward, once its retagging is fully done. Off by default, and only needs `mkvtoolnix-gui.exe` to actually exist in the folder when it's turned on. The console equivalent is `--open-in-mkvtoolnix-gui` (plus `--mkvtoolnix-gui <path>` if it's not alongside `--mkvmerge`/`--mkvpropedit`).
 
 ## Selecting files to process (GUI)
 
@@ -155,7 +157,7 @@ By default files are processed one at a time on the console (`--parallel <n>` ra
 ## Requirements
 
 - [.NET 9 SDK](https://dotnet.microsoft.com/download) or newer to build (a newer SDK builds the `net9.0` targets fine).
-- MKVToolNix — `mkvmerge.exe` and `mkvpropedit.exe`. The console defaults to `%LOCALAPPDATA%\mkvtoolnix\`; the GUI starts blank and remembers whatever you last pointed it at instead (see [Tool paths (GUI)](#tool-paths-gui)). Both are validated before a run starts.
+- MKVToolNix — `mkvmerge.exe` and `mkvpropedit.exe` (and `mkvtoolnix-gui.exe`, if you use **Verify In MKVToolNix**). The console defaults to `%LOCALAPPDATA%\mkvtoolnix\`; the GUI asks for the install folder once and remembers it instead (see [Tool paths (GUI)](#tool-paths-gui)). All are validated before a run starts.
 - Windows for the GUI (WinForms). The core engine and console front end target `net9.0`.
 
 ## Build

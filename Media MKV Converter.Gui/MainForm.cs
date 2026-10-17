@@ -53,10 +53,8 @@ public partial class MainForm : Form
         txtInputFolder.Text = Environment.CurrentDirectory.TrimEnd(Path.DirectorySeparatorChar, Path.AltDirectorySeparatorChar);
 
         var savedToolPaths = ToolPathSettingsStore.Load();
-        txtMkvMerge.Text = savedToolPaths.MkvMergePath ?? string.Empty;
-        txtMkvPropEdit.Text = savedToolPaths.MkvPropEditPath ?? string.Empty;
-        txtMkvMerge.Leave += (_, _) => SaveToolPaths();
-        txtMkvPropEdit.Leave += (_, _) => SaveToolPaths();
+        txtMkvToolNixFolder.Text = savedToolPaths.MkvToolNixFolder ?? string.Empty;
+        txtMkvToolNixFolder.Leave += (_, _) => SaveToolPaths();
 
         txtSkip.Text = @"\Processing\";
         chkOverwrite.Checked = true;
@@ -169,14 +167,20 @@ public partial class MainForm : Form
         }
     }
 
-    private void btnBrowseMkvMerge_Click(object? sender, EventArgs e)
+    private void btnBrowseMkvToolNixFolder_Click(object? sender, EventArgs e)
     {
-        BrowseForExecutable(txtMkvMerge, "Select mkvmerge.exe", "mkvmerge.exe");
-    }
+        using var dialog = new FolderBrowserDialog
+        {
+            Description = "Select the folder where MKVToolNix is installed",
+            InitialDirectory = Directory.Exists(txtMkvToolNixFolder.Text) ? txtMkvToolNixFolder.Text : Environment.GetFolderPath(Environment.SpecialFolder.ProgramFiles),
+            UseDescriptionForTitle = true,
+        };
 
-    private void btnBrowseMkvPropEdit_Click(object? sender, EventArgs e)
-    {
-        BrowseForExecutable(txtMkvPropEdit, "Select mkvpropedit.exe", "mkvpropedit.exe");
+        if (dialog.ShowDialog(this) == DialogResult.OK)
+        {
+            txtMkvToolNixFolder.Text = dialog.SelectedPath;
+            SaveToolPaths();
+        }
     }
 
     private void btnToggleAdvanced_Click(object? sender, EventArgs e)
@@ -843,17 +847,17 @@ public partial class MainForm : Form
             throw new ArgumentException($"Input folder does not exist: {inputFolder}");
         }
 
-        var mkvMergePath = txtMkvMerge.Text.Trim();
-        if (string.IsNullOrWhiteSpace(mkvMergePath))
+        var mkvToolNixFolder = txtMkvToolNixFolder.Text.Trim();
+        if (string.IsNullOrWhiteSpace(mkvToolNixFolder))
         {
-            throw new ArgumentException("Enter the path to mkvmerge.exe.");
+            throw new ArgumentException("Select the folder where MKVToolNix is installed.");
         }
 
-        var mkvPropEditPath = txtMkvPropEdit.Text.Trim();
-        if (string.IsNullOrWhiteSpace(mkvPropEditPath))
-        {
-            throw new ArgumentException("Enter the path to mkvpropedit.exe.");
-        }
+        // mkvmerge.exe, mkvpropedit.exe, and mkvtoolnix-gui.exe all live in this one folder — actual
+        // existence is checked once, centrally, by MediaConverterEngine.ValidateOptions.
+        var mkvMergePath = Path.Combine(mkvToolNixFolder, "mkvmerge.exe");
+        var mkvPropEditPath = Path.Combine(mkvToolNixFolder, "mkvpropedit.exe");
+        var mkvToolNixGuiPath = Path.Combine(mkvToolNixFolder, "mkvtoolnix-gui.exe");
 
         if (!DurationParser.TryParse(txtTrimEnd.Text, out var trimFromEnd))
         {
@@ -913,6 +917,8 @@ public partial class MainForm : Form
             OverwriteExisting = chkOverwrite.Checked,
             MkvMergePath = Path.GetFullPath(mkvMergePath),
             MkvPropEditPath = Path.GetFullPath(mkvPropEditPath),
+            MkvToolNixGuiPath = Path.GetFullPath(mkvToolNixGuiPath),
+            OpenInMkvToolNixGui = chkVerifyInMkvToolNix.Checked,
             SkipFragment = string.IsNullOrWhiteSpace(txtSkip.Text) ? @"\Processing\" : txtSkip.Text.Trim(),
             TraverseSubfolders = chkTraverseSubfolders.Checked,
             MaintainFolderStructure = chkMaintainFolderStructure.Checked,
@@ -1129,46 +1135,12 @@ public partial class MainForm : Form
         chkMaintainFolderStructure.Enabled = skipEnabled;
     }
 
-    private void BrowseForExecutable(TextBox targetTextBox, string title, string defaultFileName)
-    {
-        using var dialog = new OpenFileDialog
-        {
-            Title = title,
-            Filter = "Executable Files (*.exe)|*.exe|All Files (*.*)|*.*",
-            FileName = defaultFileName,
-            InitialDirectory = GetInitialDirectory(targetTextBox.Text),
-            CheckFileExists = true,
-        };
-
-        if (dialog.ShowDialog(this) == DialogResult.OK)
-        {
-            targetTextBox.Text = dialog.FileName;
-            SaveToolPaths();
-        }
-    }
-
     private void SaveToolPaths()
     {
         ToolPathSettingsStore.Save(new ToolPathSettings
         {
-            MkvMergePath = string.IsNullOrWhiteSpace(txtMkvMerge.Text) ? null : txtMkvMerge.Text.Trim(),
-            MkvPropEditPath = string.IsNullOrWhiteSpace(txtMkvPropEdit.Text) ? null : txtMkvPropEdit.Text.Trim(),
+            MkvToolNixFolder = string.IsNullOrWhiteSpace(txtMkvToolNixFolder.Text) ? null : txtMkvToolNixFolder.Text.Trim(),
         });
-    }
-
-    private static string GetInitialDirectory(string path)
-    {
-        if (File.Exists(path))
-        {
-            return Path.GetDirectoryName(path) ?? Environment.CurrentDirectory;
-        }
-
-        if (Directory.Exists(path))
-        {
-            return path;
-        }
-
-        return Environment.CurrentDirectory;
     }
 
     private void SetAdvancedVisibility(bool visible)
@@ -1200,14 +1172,13 @@ public partial class MainForm : Form
         btnToggleAdvanced.Enabled = !isRunning;
         btnBrowseInput.Enabled = !isRunning;
         btnBrowseOutput.Enabled = !isRunning;
-        btnBrowseMkvMerge.Enabled = !isRunning;
-        btnBrowseMkvPropEdit.Enabled = !isRunning;
+        btnBrowseMkvToolNixFolder.Enabled = !isRunning;
         txtInputFolder.Enabled = !isRunning;
         txtOutputFolder.Enabled = !isRunning;
         chkOverwrite.Enabled = !isRunning;
         txtSkip.Enabled = !isRunning;
-        txtMkvMerge.Enabled = !isRunning;
-        txtMkvPropEdit.Enabled = !isRunning;
+        txtMkvToolNixFolder.Enabled = !isRunning;
+        chkVerifyInMkvToolNix.Enabled = !isRunning;
         chkDryRun.Enabled = !isRunning;
         chkTraverseSubfolders.Enabled = !isRunning;
         clbLanguages.Enabled = !isRunning;

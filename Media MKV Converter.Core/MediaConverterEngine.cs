@@ -18,6 +18,16 @@ public sealed class MediaConverterOptions
 
     public string MkvPropEditPath { get; init; } = Path.Combine(DefaultToolRoot, "mkvpropedit.exe");
 
+    /// <summary>
+    /// Opens each file's original and finished output in MKVToolNix's own GUI as the run goes, for
+    /// a quick look without hunting for the files afterward. Off by default; <see cref="MkvToolNixGuiPath"/>
+    /// is only validated when this is on, since most runs don't need mkvtoolnix-gui installed at all.
+    /// </summary>
+    public bool OpenInMkvToolNixGui { get; init; }
+
+    /// <summary>Path to mkvtoolnix-gui.exe, used only when <see cref="OpenInMkvToolNixGui"/> is on.</summary>
+    public string MkvToolNixGuiPath { get; init; } = Path.Combine(DefaultToolRoot, "mkvtoolnix-gui.exe");
+
     public string SkipFragment { get; init; } = @"\Processing\";
 
     /// <summary>
@@ -401,6 +411,11 @@ public sealed class MediaConverterEngine
                 throw new InvalidOperationException($"mkvmerge did not create output file: {tempOutputPath}");
             }
 
+            // Opened here, before ReplaceOutput, because in-place/overwrite mode deletes inputPath
+            // as part of that call — this is the latest point it's guaranteed to still exist, and
+            // the longest head start mkvtoolnix-gui gets to actually open it before that happens.
+            OpenInMkvToolNixGui(options, inputPath);
+
             ReportStage("replace-output", 3, 9);
             var finalOutputPath = ReplaceOutput(inputPath, preferredOutputPath, tempOutputPath, options);
 
@@ -477,6 +492,8 @@ public sealed class MediaConverterEngine
                 CalculatePercentComplete(completedCountBefore + 1, totalFiles),
                 totalStopwatch.Elapsed,
                 fileStopwatch.Elapsed));
+
+            OpenInMkvToolNixGui(options, finalOutputPath);
         }
         finally
         {
@@ -578,6 +595,29 @@ public sealed class MediaConverterEngine
         }
 
         return GetUniqueOutputPath(preferredOutputPath);
+    }
+
+    /// <summary>Best-effort: a viewer that fails to launch (missing install, no desktop session,
+    /// whatever) should never fail the file it was about to show.</summary>
+    private static void OpenInMkvToolNixGui(MediaConverterOptions options, string filePath)
+    {
+        if (!options.OpenInMkvToolNixGui)
+        {
+            return;
+        }
+
+        try
+        {
+            Process.Start(new ProcessStartInfo
+            {
+                FileName = options.MkvToolNixGuiPath,
+                ArgumentList = { filePath },
+                UseShellExecute = false,
+            });
+        }
+        catch
+        {
+        }
     }
 
     private static string ReplaceOutput(string inputPath, string preferredOutputPath, string tempOutputPath, MediaConverterOptions options)
@@ -1050,6 +1090,11 @@ public sealed class MediaConverterEngine
         if (!File.Exists(options.MkvPropEditPath))
         {
             throw new ArgumentException($"mkvpropedit.exe not found: {options.MkvPropEditPath}");
+        }
+
+        if (options.OpenInMkvToolNixGui && !File.Exists(options.MkvToolNixGuiPath))
+        {
+            throw new ArgumentException($"mkvtoolnix-gui.exe not found: {options.MkvToolNixGuiPath}");
         }
 
         if (options.TrimFromEnd < TimeSpan.Zero)

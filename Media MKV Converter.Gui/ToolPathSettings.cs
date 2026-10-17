@@ -3,16 +3,16 @@ using System.Text.Json;
 namespace Media_MKV_Converter.Gui;
 
 /// <summary>
-/// The mkvmerge/mkvpropedit paths last used on this machine. This is deliberately separate from
-/// <see cref="ConversionPreset"/> — tool paths describe the machine, not the content, the same
-/// reason they're excluded from presets — and it's a single record, not a named list: there's
-/// nothing to pick between, just whatever was used last.
+/// The MKVToolNix install folder last used on this machine — mkvmerge.exe, mkvpropedit.exe, and
+/// mkvtoolnix-gui.exe all live together in one folder, so the GUI only asks for that folder once
+/// rather than browsing to each .exe separately. Deliberately separate from <see cref="ConversionPreset"/>
+/// — this describes the machine, not the content, the same reason tool paths are excluded from
+/// presets — and it's a single record, not a named list: there's nothing to pick between, just
+/// whatever was used last.
 /// </summary>
 public sealed class ToolPathSettings
 {
-    public string? MkvMergePath { get; set; }
-
-    public string? MkvPropEditPath { get; set; }
+    public string? MkvToolNixFolder { get; set; }
 }
 
 /// <summary>
