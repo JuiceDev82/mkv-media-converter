@@ -707,6 +707,7 @@ public partial class MainForm : Form
             Languages = languages,
             PrimaryLanguage = string.IsNullOrWhiteSpace(txtPrimaryLanguage.Text) ? null : txtPrimaryLanguage.Text.Trim(),
             ExcludeCommentaryTracks = chkExcludeCommentary.Checked,
+            TrimFromStart = string.IsNullOrWhiteSpace(txtTrimStart.Text) ? null : txtTrimStart.Text.Trim(),
             TrimFromEnd = string.IsNullOrWhiteSpace(txtTrimEnd.Text) ? null : txtTrimEnd.Text.Trim(),
             TrimNameAfter = string.IsNullOrWhiteSpace(txtTrimName.Text) ? null : txtTrimName.Text.Trim(),
             RemoveFromName = string.IsNullOrWhiteSpace(txtRemoveFromName.Text) ? null : txtRemoveFromName.Text.Trim(),
@@ -738,6 +739,7 @@ public partial class MainForm : Form
 
         txtPrimaryLanguage.Text = preset.PrimaryLanguage ?? string.Empty;
         chkExcludeCommentary.Checked = preset.ExcludeCommentaryTracks;
+        txtTrimStart.Text = preset.TrimFromStart ?? string.Empty;
         txtTrimEnd.Text = preset.TrimFromEnd ?? string.Empty;
         txtTrimName.Text = preset.TrimNameAfter ?? string.Empty;
         txtRemoveFromName.Text = preset.RemoveFromName ?? string.Empty;
@@ -859,6 +861,12 @@ public partial class MainForm : Form
         var mkvPropEditPath = Path.Combine(mkvToolNixFolder, "mkvpropedit.exe");
         var mkvToolNixGuiPath = Path.Combine(mkvToolNixFolder, "mkvtoolnix-gui.exe");
 
+        if (!DurationParser.TryParse(txtTrimStart.Text, out var trimFromStart))
+        {
+            throw new ArgumentException(
+                $"'{txtTrimStart.Text.Trim()}' is not a valid duration. Try 10m, 90s, 1h30m or 00:10:00.");
+        }
+
         if (!DurationParser.TryParse(txtTrimEnd.Text, out var trimFromEnd))
         {
             throw new ArgumentException(
@@ -908,6 +916,7 @@ public partial class MainForm : Form
             ExcludeCommentaryTracks = chkExcludeCommentary.Checked,
             ExcludedPaths = GetManuallyExcludedPaths(),
             MaxParallelFiles = (int)numParallelFiles.Value,
+            TrimFromStart = trimFromStart,
             TrimFromEnd = trimFromEnd,
             TrimNameAfter = string.IsNullOrWhiteSpace(trimNameAfter) ? null : trimNameAfter,
             RemoveFromName = removeFromName,
@@ -1183,6 +1192,8 @@ public partial class MainForm : Form
         chkTraverseSubfolders.Enabled = !isRunning;
         clbLanguages.Enabled = !isRunning;
         lblLanguages.Enabled = !isRunning;
+        txtTrimStart.Enabled = !isRunning;
+        lblTrimStart.Enabled = !isRunning;
         txtTrimEnd.Enabled = !isRunning;
         lblTrimEnd.Enabled = !isRunning;
         txtPrimaryLanguage.Enabled = !isRunning;

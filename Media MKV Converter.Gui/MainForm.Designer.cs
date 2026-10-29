@@ -25,6 +25,8 @@ partial class MainForm
     private CheckBox chkExcludeCommentary;
     private Label lblParallelFiles;
     private NumericUpDown numParallelFiles;
+    private Label lblTrimStart;
+    private TextBox txtTrimStart;
     private Label lblTrimEnd;
     private TextBox txtTrimEnd;
     private Label lblTrimName;
@@ -54,6 +56,15 @@ partial class MainForm
     private TextBox txtMkvToolNixFolder;
     private Button btnBrowseMkvToolNixFolder;
     private CheckBox chkVerifyInMkvToolNix;
+    private GroupBox grpGeneral;
+    private TableLayoutPanel layoutGeneral;
+    private GroupBox grpTracks;
+    private TableLayoutPanel layoutTracks;
+    private TableLayoutPanel layoutTrimAndNaming;
+    private GroupBox grpTrimming;
+    private TableLayoutPanel layoutTrimming;
+    private GroupBox grpFileNaming;
+    private TableLayoutPanel layoutFileNaming;
     private ProgressBar progressOverall;
     private Label lblProgressPercent;
     private Label lblCurrent;
@@ -107,6 +118,8 @@ partial class MainForm
         chkExcludeCommentary = new CheckBox();
         lblParallelFiles = new Label();
         numParallelFiles = new NumericUpDown();
+        lblTrimStart = new Label();
+        txtTrimStart = new TextBox();
         lblTrimEnd = new Label();
         txtTrimEnd = new TextBox();
         lblTrimName = new Label();
@@ -136,6 +149,15 @@ partial class MainForm
         txtMkvToolNixFolder = new TextBox();
         btnBrowseMkvToolNixFolder = new Button();
         chkVerifyInMkvToolNix = new CheckBox();
+        grpGeneral = new GroupBox();
+        layoutGeneral = new TableLayoutPanel();
+        grpTracks = new GroupBox();
+        layoutTracks = new TableLayoutPanel();
+        layoutTrimAndNaming = new TableLayoutPanel();
+        grpTrimming = new GroupBox();
+        layoutTrimming = new TableLayoutPanel();
+        grpFileNaming = new GroupBox();
+        layoutFileNaming = new TableLayoutPanel();
         progressOverall = new ProgressBar();
         lblProgressPercent = new Label();
         lblCurrent = new Label();
@@ -159,6 +181,15 @@ partial class MainForm
         panelTopActions.SuspendLayout();
         panelAdvanced.SuspendLayout();
         layoutAdvanced.SuspendLayout();
+        grpGeneral.SuspendLayout();
+        layoutGeneral.SuspendLayout();
+        grpTracks.SuspendLayout();
+        layoutTracks.SuspendLayout();
+        layoutTrimAndNaming.SuspendLayout();
+        grpTrimming.SuspendLayout();
+        layoutTrimming.SuspendLayout();
+        grpFileNaming.SuspendLayout();
+        layoutFileNaming.SuspendLayout();
         grpResults.SuspendLayout();
         layoutResults.SuspendLayout();
         SuspendLayout();
@@ -406,57 +437,192 @@ partial class MainForm
         panelAdvanced.Dock = DockStyle.Fill;
         panelAdvanced.Location = new Point(15, 123);
         panelAdvanced.Name = "panelAdvanced";
-        panelAdvanced.Size = new Size(1054, 426);
+        panelAdvanced.Size = new Size(1054, 510);
         panelAdvanced.TabIndex = 11;
-        // 
+        //
         // layoutAdvanced
-        // 
+        //
+        // Each settings row below (after Preset) holds one category GroupBox spanning all 3 columns
+        // — grouped this way instead of one flat list of rows so related settings (what to keep,
+        // how to trim, how to rename, how to run) read as distinct sections rather than one long form.
         layoutAdvanced.ColumnCount = 3;
         layoutAdvanced.ColumnStyles.Add(new ColumnStyle(SizeType.Absolute, 115F));
         layoutAdvanced.ColumnStyles.Add(new ColumnStyle(SizeType.Percent, 100F));
         layoutAdvanced.ColumnStyles.Add(new ColumnStyle(SizeType.Absolute, 100F));
         layoutAdvanced.Controls.Add(lblPreset, 0, 0);
         layoutAdvanced.Controls.Add(panelPreset, 1, 0);
-        layoutAdvanced.Controls.Add(lblMkvToolNixFolder, 0, 1);
-        layoutAdvanced.Controls.Add(txtMkvToolNixFolder, 1, 1);
-        layoutAdvanced.Controls.Add(btnBrowseMkvToolNixFolder, 2, 1);
-        layoutAdvanced.Controls.Add(chkVerifyInMkvToolNix, 1, 2);
-        layoutAdvanced.Controls.Add(lblSkip, 0, 3);
-        layoutAdvanced.Controls.Add(txtSkip, 1, 3);
-        layoutAdvanced.Controls.Add(lblLanguages, 0, 4);
-        layoutAdvanced.Controls.Add(clbLanguages, 1, 4);
-        layoutAdvanced.Controls.Add(lblPrimaryLanguage, 0, 5);
-        layoutAdvanced.Controls.Add(txtPrimaryLanguage, 1, 5);
-        layoutAdvanced.Controls.Add(lblTrimEnd, 0, 6);
-        layoutAdvanced.Controls.Add(txtTrimEnd, 1, 6);
-        layoutAdvanced.Controls.Add(lblTrimName, 0, 7);
-        layoutAdvanced.Controls.Add(txtTrimName, 1, 7);
-        layoutAdvanced.Controls.Add(lblRemoveFromName, 0, 8);
-        layoutAdvanced.Controls.Add(txtRemoveFromName, 1, 8);
-        layoutAdvanced.Controls.Add(lblReplaceInName, 0, 9);
-        layoutAdvanced.Controls.Add(txtReplaceInName, 1, 9);
-        layoutAdvanced.Controls.Add(panelAdvancedOptions, 1, 10);
+        layoutAdvanced.Controls.Add(grpGeneral, 0, 1);
+        layoutAdvanced.Controls.Add(grpTracks, 0, 2);
+        layoutAdvanced.Controls.Add(layoutTrimAndNaming, 0, 3);
         layoutAdvanced.Dock = DockStyle.Fill;
         layoutAdvanced.Location = new Point(0, 0);
         layoutAdvanced.Name = "layoutAdvanced";
-        layoutAdvanced.RowCount = 11;
+        layoutAdvanced.RowCount = 4;
         layoutAdvanced.RowStyles.Add(new RowStyle(SizeType.Absolute, 34F));
-        layoutAdvanced.RowStyles.Add(new RowStyle(SizeType.Absolute, 34F));
-        layoutAdvanced.RowStyles.Add(new RowStyle(SizeType.Absolute, 34F));
-        layoutAdvanced.RowStyles.Add(new RowStyle(SizeType.Absolute, 34F));
-        layoutAdvanced.RowStyles.Add(new RowStyle(SizeType.Absolute, 86F));
-        layoutAdvanced.RowStyles.Add(new RowStyle(SizeType.Absolute, 34F));
-        layoutAdvanced.RowStyles.Add(new RowStyle(SizeType.Absolute, 34F));
-        layoutAdvanced.RowStyles.Add(new RowStyle(SizeType.Absolute, 34F));
-        layoutAdvanced.RowStyles.Add(new RowStyle(SizeType.Absolute, 34F));
-        layoutAdvanced.RowStyles.Add(new RowStyle(SizeType.Absolute, 34F));
-        layoutAdvanced.RowStyles.Add(new RowStyle(SizeType.Absolute, 34F));
-        layoutAdvanced.Size = new Size(1054, 426);
+        layoutAdvanced.RowStyles.Add(new RowStyle(SizeType.Absolute, 164F));
+        layoutAdvanced.RowStyles.Add(new RowStyle(SizeType.Absolute, 182F));
+        layoutAdvanced.RowStyles.Add(new RowStyle(SizeType.Absolute, 130F));
+        layoutAdvanced.Size = new Size(1054, 510);
         layoutAdvanced.TabIndex = 0;
         layoutAdvanced.SetColumnSpan(panelPreset, 2);
-        layoutAdvanced.SetColumnSpan(panelAdvancedOptions, 2);
-        layoutAdvanced.SetColumnSpan(clbLanguages, 2);
-        layoutAdvanced.SetColumnSpan(chkVerifyInMkvToolNix, 2);
+        layoutAdvanced.SetColumnSpan(grpGeneral, 3);
+        layoutAdvanced.SetColumnSpan(grpTracks, 3);
+        layoutAdvanced.SetColumnSpan(layoutTrimAndNaming, 3);
+        //
+        // grpGeneral
+        //
+        // Tool location plus everything about how a run behaves (overwrite, dry run, parallelism,
+        // folder traversal) — operational settings, as opposed to what the output actually contains.
+        grpGeneral.Controls.Add(layoutGeneral);
+        grpGeneral.Dock = DockStyle.Fill;
+        grpGeneral.Margin = new Padding(0, 6, 0, 0);
+        grpGeneral.Name = "grpGeneral";
+        grpGeneral.Size = new Size(1054, 158);
+        grpGeneral.TabIndex = 0;
+        grpGeneral.TabStop = false;
+        grpGeneral.Text = "General";
+        //
+        // layoutGeneral
+        //
+        layoutGeneral.ColumnCount = 3;
+        layoutGeneral.ColumnStyles.Add(new ColumnStyle(SizeType.Absolute, 115F));
+        layoutGeneral.ColumnStyles.Add(new ColumnStyle(SizeType.Percent, 100F));
+        layoutGeneral.ColumnStyles.Add(new ColumnStyle(SizeType.Absolute, 100F));
+        layoutGeneral.Controls.Add(lblMkvToolNixFolder, 0, 0);
+        layoutGeneral.Controls.Add(txtMkvToolNixFolder, 1, 0);
+        layoutGeneral.Controls.Add(btnBrowseMkvToolNixFolder, 2, 0);
+        layoutGeneral.Controls.Add(chkVerifyInMkvToolNix, 1, 1);
+        layoutGeneral.Controls.Add(lblSkip, 0, 2);
+        layoutGeneral.Controls.Add(txtSkip, 1, 2);
+        layoutGeneral.Controls.Add(panelAdvancedOptions, 1, 3);
+        layoutGeneral.Dock = DockStyle.Fill;
+        layoutGeneral.Location = new Point(3, 19);
+        layoutGeneral.Name = "layoutGeneral";
+        layoutGeneral.RowCount = 4;
+        layoutGeneral.RowStyles.Add(new RowStyle(SizeType.Absolute, 34F));
+        layoutGeneral.RowStyles.Add(new RowStyle(SizeType.Absolute, 34F));
+        layoutGeneral.RowStyles.Add(new RowStyle(SizeType.Absolute, 34F));
+        layoutGeneral.RowStyles.Add(new RowStyle(SizeType.Absolute, 34F));
+        layoutGeneral.Size = new Size(1048, 136);
+        layoutGeneral.TabIndex = 0;
+        layoutGeneral.SetColumnSpan(chkVerifyInMkvToolNix, 2);
+        layoutGeneral.SetColumnSpan(panelAdvancedOptions, 2);
+        //
+        // grpTracks
+        //
+        // Which audio/subtitle languages survive the remux, which one gets flagged default, and
+        // whether commentary tracks are dropped — content selection, grouped separately from naming
+        // or trimming since it's about what's *inside* the file, not the file around it.
+        grpTracks.Controls.Add(layoutTracks);
+        grpTracks.Dock = DockStyle.Fill;
+        grpTracks.Margin = new Padding(0, 6, 0, 0);
+        grpTracks.Name = "grpTracks";
+        grpTracks.Size = new Size(1054, 176);
+        grpTracks.TabIndex = 0;
+        grpTracks.TabStop = false;
+        grpTracks.Text = "Tracks";
+        //
+        // layoutTracks
+        //
+        layoutTracks.ColumnCount = 3;
+        layoutTracks.ColumnStyles.Add(new ColumnStyle(SizeType.Absolute, 115F));
+        layoutTracks.ColumnStyles.Add(new ColumnStyle(SizeType.Percent, 100F));
+        layoutTracks.ColumnStyles.Add(new ColumnStyle(SizeType.Absolute, 100F));
+        layoutTracks.Controls.Add(lblLanguages, 0, 0);
+        layoutTracks.Controls.Add(clbLanguages, 1, 0);
+        layoutTracks.Controls.Add(lblPrimaryLanguage, 0, 1);
+        layoutTracks.Controls.Add(txtPrimaryLanguage, 1, 1);
+        layoutTracks.Controls.Add(chkExcludeCommentary, 1, 2);
+        layoutTracks.Dock = DockStyle.Fill;
+        layoutTracks.Location = new Point(3, 19);
+        layoutTracks.Name = "layoutTracks";
+        layoutTracks.RowCount = 3;
+        layoutTracks.RowStyles.Add(new RowStyle(SizeType.Absolute, 86F));
+        layoutTracks.RowStyles.Add(new RowStyle(SizeType.Absolute, 34F));
+        layoutTracks.RowStyles.Add(new RowStyle(SizeType.Absolute, 34F));
+        layoutTracks.Size = new Size(1048, 154);
+        layoutTracks.TabIndex = 0;
+        layoutTracks.SetColumnSpan(clbLanguages, 2);
+        layoutTracks.SetColumnSpan(chkExcludeCommentary, 2);
+        //
+        // layoutTrimAndNaming
+        //
+        // Video Trimming and File Naming are each short (two and three rows), so they sit side by
+        // side rather than each claiming a full-width row of their own underneath.
+        layoutTrimAndNaming.ColumnCount = 2;
+        layoutTrimAndNaming.ColumnStyles.Add(new ColumnStyle(SizeType.Percent, 50F));
+        layoutTrimAndNaming.ColumnStyles.Add(new ColumnStyle(SizeType.Percent, 50F));
+        layoutTrimAndNaming.Controls.Add(grpTrimming, 0, 0);
+        layoutTrimAndNaming.Controls.Add(grpFileNaming, 1, 0);
+        layoutTrimAndNaming.Dock = DockStyle.Fill;
+        layoutTrimAndNaming.Location = new Point(0, 0);
+        layoutTrimAndNaming.Margin = new Padding(0, 6, 0, 0);
+        layoutTrimAndNaming.Name = "layoutTrimAndNaming";
+        layoutTrimAndNaming.RowCount = 1;
+        layoutTrimAndNaming.RowStyles.Add(new RowStyle(SizeType.Absolute, 124F));
+        layoutTrimAndNaming.Size = new Size(1054, 124);
+        layoutTrimAndNaming.TabIndex = 0;
+        //
+        // grpTrimming
+        //
+        grpTrimming.Controls.Add(layoutTrimming);
+        grpTrimming.Dock = DockStyle.Fill;
+        grpTrimming.Margin = new Padding(0, 0, 6, 0);
+        grpTrimming.Name = "grpTrimming";
+        grpTrimming.Size = new Size(521, 124);
+        grpTrimming.TabIndex = 0;
+        grpTrimming.TabStop = false;
+        grpTrimming.Text = "Video Trimming";
+        //
+        // layoutTrimming
+        //
+        layoutTrimming.ColumnCount = 2;
+        layoutTrimming.ColumnStyles.Add(new ColumnStyle(SizeType.Absolute, 95F));
+        layoutTrimming.ColumnStyles.Add(new ColumnStyle(SizeType.Percent, 100F));
+        layoutTrimming.Controls.Add(lblTrimStart, 0, 0);
+        layoutTrimming.Controls.Add(txtTrimStart, 1, 0);
+        layoutTrimming.Controls.Add(lblTrimEnd, 0, 1);
+        layoutTrimming.Controls.Add(txtTrimEnd, 1, 1);
+        layoutTrimming.Dock = DockStyle.Fill;
+        layoutTrimming.Location = new Point(3, 19);
+        layoutTrimming.Name = "layoutTrimming";
+        layoutTrimming.RowCount = 2;
+        layoutTrimming.RowStyles.Add(new RowStyle(SizeType.Absolute, 34F));
+        layoutTrimming.RowStyles.Add(new RowStyle(SizeType.Absolute, 34F));
+        layoutTrimming.Size = new Size(515, 102);
+        layoutTrimming.TabIndex = 0;
+        //
+        // grpFileNaming
+        //
+        grpFileNaming.Controls.Add(layoutFileNaming);
+        grpFileNaming.Dock = DockStyle.Fill;
+        grpFileNaming.Margin = new Padding(6, 0, 0, 0);
+        grpFileNaming.Name = "grpFileNaming";
+        grpFileNaming.Size = new Size(521, 124);
+        grpFileNaming.TabIndex = 1;
+        grpFileNaming.TabStop = false;
+        grpFileNaming.Text = "File Naming";
+        //
+        // layoutFileNaming
+        //
+        layoutFileNaming.ColumnCount = 2;
+        layoutFileNaming.ColumnStyles.Add(new ColumnStyle(SizeType.Absolute, 95F));
+        layoutFileNaming.ColumnStyles.Add(new ColumnStyle(SizeType.Percent, 100F));
+        layoutFileNaming.Controls.Add(lblTrimName, 0, 0);
+        layoutFileNaming.Controls.Add(txtTrimName, 1, 0);
+        layoutFileNaming.Controls.Add(lblRemoveFromName, 0, 1);
+        layoutFileNaming.Controls.Add(txtRemoveFromName, 1, 1);
+        layoutFileNaming.Controls.Add(lblReplaceInName, 0, 2);
+        layoutFileNaming.Controls.Add(txtReplaceInName, 1, 2);
+        layoutFileNaming.Dock = DockStyle.Fill;
+        layoutFileNaming.Location = new Point(3, 19);
+        layoutFileNaming.Name = "layoutFileNaming";
+        layoutFileNaming.RowCount = 3;
+        layoutFileNaming.RowStyles.Add(new RowStyle(SizeType.Absolute, 34F));
+        layoutFileNaming.RowStyles.Add(new RowStyle(SizeType.Absolute, 34F));
+        layoutFileNaming.RowStyles.Add(new RowStyle(SizeType.Absolute, 34F));
+        layoutFileNaming.Size = new Size(515, 102);
+        layoutFileNaming.TabIndex = 0;
         //
         // panelAdvancedOptions
         //
@@ -464,7 +630,6 @@ partial class MainForm
         panelAdvancedOptions.Controls.Add(chkDryRun);
         panelAdvancedOptions.Controls.Add(chkTraverseSubfolders);
         panelAdvancedOptions.Controls.Add(chkMaintainFolderStructure);
-        panelAdvancedOptions.Controls.Add(chkExcludeCommentary);
         panelAdvancedOptions.Controls.Add(lblParallelFiles);
         panelAdvancedOptions.Controls.Add(numParallelFiles);
         panelAdvancedOptions.Dock = DockStyle.Fill;
@@ -626,24 +791,43 @@ partial class MainForm
         txtPrimaryLanguage.Size = new Size(833, 23);
         txtPrimaryLanguage.TabIndex = 11;
         //
+        // lblTrimStart
+        //
+        lblTrimStart.Anchor = AnchorStyles.Left;
+        lblTrimStart.AutoSize = true;
+        lblTrimStart.Location = new Point(3, 9);
+        lblTrimStart.Name = "lblTrimStart";
+        lblTrimStart.Size = new Size(84, 15);
+        lblTrimStart.TabIndex = 0;
+        lblTrimStart.Text = "Trim From Start";
+        //
+        // txtTrimStart
+        //
+        txtTrimStart.Anchor = AnchorStyles.Left | AnchorStyles.Right;
+        txtTrimStart.Location = new Point(98, 5);
+        txtTrimStart.Name = "txtTrimStart";
+        txtTrimStart.PlaceholderText = "Optional - cut intros/recaps off the start, e.g. 10m, 90s, 1h30m or 00:10:00";
+        txtTrimStart.Size = new Size(414, 23);
+        txtTrimStart.TabIndex = 1;
+        //
         // lblTrimEnd
         //
         lblTrimEnd.Anchor = AnchorStyles.Left;
         lblTrimEnd.AutoSize = true;
-        lblTrimEnd.Location = new Point(3, 205);
+        lblTrimEnd.Location = new Point(3, 43);
         lblTrimEnd.Name = "lblTrimEnd";
         lblTrimEnd.Size = new Size(77, 15);
-        lblTrimEnd.TabIndex = 12;
+        lblTrimEnd.TabIndex = 2;
         lblTrimEnd.Text = "Trim From End";
         //
         // txtTrimEnd
         //
         txtTrimEnd.Anchor = AnchorStyles.Left | AnchorStyles.Right;
-        txtTrimEnd.Location = new Point(118, 201);
+        txtTrimEnd.Location = new Point(98, 39);
         txtTrimEnd.Name = "txtTrimEnd";
         txtTrimEnd.PlaceholderText = "Optional - cut credits off the end, e.g. 10m, 90s, 1h30m or 00:10:00";
-        txtTrimEnd.Size = new Size(833, 23);
-        txtTrimEnd.TabIndex = 13;
+        txtTrimEnd.Size = new Size(414, 23);
+        txtTrimEnd.TabIndex = 3;
         //
         // lblTrimName
         //
@@ -993,9 +1177,9 @@ partial class MainForm
         // 
         AutoScaleDimensions = new SizeF(7F, 15F);
         AutoScaleMode = AutoScaleMode.Font;
-        ClientSize = new Size(1084, 1055);
+        ClientSize = new Size(1084, 1139);
         Controls.Add(layoutRoot);
-        MinimumSize = new Size(960, 994);
+        MinimumSize = new Size(960, 1078);
         Name = "MainForm";
         StartPosition = FormStartPosition.CenterScreen;
         Text = "Media MKV Converter";
@@ -1008,6 +1192,15 @@ partial class MainForm
         panelAdvanced.ResumeLayout(false);
         layoutAdvanced.ResumeLayout(false);
         layoutAdvanced.PerformLayout();
+        grpGeneral.ResumeLayout(false);
+        layoutGeneral.ResumeLayout(false);
+        grpTracks.ResumeLayout(false);
+        layoutTracks.ResumeLayout(false);
+        layoutTrimAndNaming.ResumeLayout(false);
+        grpTrimming.ResumeLayout(false);
+        layoutTrimming.ResumeLayout(false);
+        grpFileNaming.ResumeLayout(false);
+        layoutFileNaming.ResumeLayout(false);
         grpResults.ResumeLayout(false);
         layoutResults.ResumeLayout(false);
         layoutResults.PerformLayout();

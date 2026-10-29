@@ -65,6 +65,14 @@ public sealed class MediaConverterOptions
     public TimeSpan TrimFromEnd { get; init; } = TimeSpan.Zero;
 
     /// <summary>
+    /// How much to cut off the start of each file, for intros/recaps. Zero keeps the whole file.
+    /// mkvmerge cuts on a keyframe at or after this point, so — unlike <see cref="TrimFromEnd"/>,
+    /// which keeps slightly more than asked — the result can run slightly *shorter* than requested:
+    /// the kept footage starts a little later, not earlier, than the requested point.
+    /// </summary>
+    public TimeSpan TrimFromStart { get; init; } = TimeSpan.Zero;
+
+    /// <summary>
     /// Pattern whose first match truncates the output file name, dropping whatever follows it —
     /// "S01E**" turns "Show.S01E07.1080p.x265-GRP" into "Show.S01E07". Each "*" stands for exactly
     /// one character. Blank leaves names alone. See <see cref="FileNameTrimmer"/>.
@@ -169,6 +177,11 @@ public sealed class MediaConverterEngine
         if (options.ExcludeCommentaryTracks)
         {
             runSummaryLines.Add("Excluding commentary audio tracks");
+        }
+
+        if (options.TrimFromStart > TimeSpan.Zero)
+        {
+            runSummaryLines.Add($"Trimming from start: {DurationParser.Format(options.TrimFromStart)}");
         }
 
         if (options.TrimFromEnd > TimeSpan.Zero)
@@ -362,7 +375,7 @@ public sealed class MediaConverterEngine
 
         var originalInfo = await ReadMkvInfoAsync(inputPath, options, cancellationToken);
         EnsureAudioSurvives(originalInfo, languages, options.ExcludeCommentaryTracks);
-        var trimEndpoint = ResolveTrimEndpoint(originalInfo, options);
+        var trimRange = ResolveTrimRange(originalInfo, options);
         var forcedSubtitlePositions = GetForcedSubtitlePositions(originalInfo, languages);
         var preferredOutputPath = GetPreferredOutputPath(inputPath, options);
 
@@ -384,7 +397,7 @@ public sealed class MediaConverterEngine
             ReportStage("dry-run", 2, 2);
             progress?.Report(new MediaConverterProgress(
                 MediaConverterEventKind.FileCompleted,
-                $"        Output: {ResolveOutputPath(preferredOutputPath, options)}{Environment.NewLine}        File runtime: {FormatDuration(fileStopwatch.Elapsed)}{Environment.NewLine}        Forced subtitle positions: {FormatList(forcedSubtitlePositions)}{DescribeTrimPlan(originalInfo, trimEndpoint)}{DescribeRename(inputPath, ResolveOutputPath(preferredOutputPath, options))}{DescribeCommentaryExclusionPlan(originalInfo, languages, options.ExcludeCommentaryTracks)}{DescribePrimaryAudioPlan(originalInfo, languages, options.ExcludeCommentaryTracks, primaryLanguage)}{Environment.NewLine}        Would clear track names after remux",
+                $"        Output: {ResolveOutputPath(preferredOutputPath, options)}{Environment.NewLine}        File runtime: {FormatDuration(fileStopwatch.Elapsed)}{Environment.NewLine}        Forced subtitle positions: {FormatList(forcedSubtitlePositions)}{DescribeTrimPlan(originalInfo, trimRange)}{DescribeRename(inputPath, ResolveOutputPath(preferredOutputPath, options))}{DescribeCommentaryExclusionPlan(originalInfo, languages, options.ExcludeCommentaryTracks)}{DescribePrimaryAudioPlan(originalInfo, languages, options.ExcludeCommentaryTracks, primaryLanguage)}{Environment.NewLine}        Would clear track names after remux",
                 inputPath,
                 fileIndex,
                 totalFiles,
@@ -402,7 +415,7 @@ public sealed class MediaConverterEngine
             ReportStage("remux", 2, 9);
             await RunProcessAsync(
                 options.MkvMergePath,
-                BuildMkvMergeArguments(inputPath, tempOutputPath, originalInfo, languages, options.ExcludeCommentaryTracks, trimEndpoint),
+                BuildMkvMergeArguments(inputPath, tempOutputPath, originalInfo, languages, options.ExcludeCommentaryTracks, trimRange),
                 "mkvmerge failed",
                 cancellationToken);
 
@@ -485,7 +498,7 @@ public sealed class MediaConverterEngine
             ReportStage("complete", 9, 9);
             progress?.Report(new MediaConverterProgress(
                 MediaConverterEventKind.FileCompleted,
-                $"        Output: {finalOutputPath}{Environment.NewLine}        File runtime: {FormatDuration(fileStopwatch.Elapsed)}{Environment.NewLine}        Forced subtitle positions: {FormatList(forcedSubtitlePositions)}{DescribeTrimResult(originalInfo, outputInfo, trimEndpoint)}{DescribeRename(inputPath, finalOutputPath)}{DescribePrimaryAudio(primaryAudioPosition)}{Environment.NewLine}        Cleared track names: {FormatList(namedTrackPositions.Where(position => !forcedNamedTrackPositions.Contains(position)).ToList())}",
+                $"        Output: {finalOutputPath}{Environment.NewLine}        File runtime: {FormatDuration(fileStopwatch.Elapsed)}{Environment.NewLine}        Forced subtitle positions: {FormatList(forcedSubtitlePositions)}{DescribeTrimResult(originalInfo, outputInfo, trimRange)}{DescribeRename(inputPath, finalOutputPath)}{DescribePrimaryAudio(primaryAudioPosition)}{Environment.NewLine}        Cleared track names: {FormatList(namedTrackPositions.Where(position => !forcedNamedTrackPositions.Contains(position)).ToList())}",
                 inputPath,
                 fileIndex,
                 totalFiles,
@@ -875,7 +888,7 @@ public sealed class MediaConverterEngine
         MkvInfo sourceInfo,
         IReadOnlyList<string> languages,
         bool excludeCommentary,
-        TimeSpan? trimEndpoint)
+        (TimeSpan Start, TimeSpan End)? trimRange)
     {
         var trackLanguages = string.Join(',', languages);
 
@@ -914,11 +927,14 @@ public sealed class MediaConverterEngine
         };
 
         // A single "parts" range keeps one span and writes it to the given output name, with none
-        // of the numeric suffixing mkvmerge applies when a split produces several files.
-        if (trimEndpoint is { } endpoint)
+        // of the numeric suffixing mkvmerge applies when a split produces several files. Both bounds
+        // are always given explicitly (00:00:00 / the source's own duration standing in for "no trim
+        // on this side") — verified directly against mkvmerge that an explicit full-duration end
+        // behaves identically to the open-ended "start-" form, so there's no need for that shorthand.
+        if (trimRange is { } range)
         {
             arguments.Add("--split");
-            arguments.Add($"parts:00:00:00-{FormatTimestamp(endpoint)}");
+            arguments.Add($"parts:{FormatTimestamp(range.Start)}-{FormatTimestamp(range.End)}");
         }
 
         arguments.Add($"\"{inputPath}\"");
@@ -930,12 +946,13 @@ public sealed class MediaConverterEngine
         $"{(int)value.TotalHours:00}:{value.Minutes:00}:{value.Seconds:00}.{value.Milliseconds:000}";
 
     /// <summary>
-    /// Where the remux should stop, or null when nothing is being trimmed. Throws rather than
-    /// guessing, because in-place mode deletes the source once the remux succeeds.
+    /// Where the kept footage should start and stop, or null when neither <see cref="MediaConverterOptions.TrimFromStart"/>
+    /// nor <see cref="MediaConverterOptions.TrimFromEnd"/> is set. Throws rather than guessing,
+    /// because in-place mode deletes the source once the remux succeeds.
     /// </summary>
-    private static TimeSpan? ResolveTrimEndpoint(MkvInfo info, MediaConverterOptions options)
+    private static (TimeSpan Start, TimeSpan End)? ResolveTrimRange(MkvInfo info, MediaConverterOptions options)
     {
-        if (options.TrimFromEnd <= TimeSpan.Zero)
+        if (options.TrimFromStart <= TimeSpan.Zero && options.TrimFromEnd <= TimeSpan.Zero)
         {
             return null;
         }
@@ -944,18 +961,27 @@ public sealed class MediaConverterEngine
         if (duration is null)
         {
             throw new InvalidOperationException(
-                "Cannot trim the end: mkvmerge did not report a duration for this file.");
+                "Cannot trim: mkvmerge did not report a duration for this file.");
         }
 
-        var endpoint = duration.Value - options.TrimFromEnd;
-        if (endpoint <= TimeSpan.Zero)
+        var start = options.TrimFromStart > TimeSpan.Zero ? options.TrimFromStart : TimeSpan.Zero;
+        var end = options.TrimFromEnd > TimeSpan.Zero ? duration.Value - options.TrimFromEnd : duration.Value;
+
+        if (end <= TimeSpan.Zero)
         {
             throw new InvalidOperationException(
                 $"Cannot trim {DurationParser.Format(options.TrimFromEnd)} from the end: " +
                 $"this file is only {FormatDuration(duration.Value)} long. Left unchanged.");
         }
 
-        return endpoint;
+        if (start >= end)
+        {
+            throw new InvalidOperationException(
+                $"Cannot trim {DurationParser.Format(start)} from the start and keep up to " +
+                $"{FormatDuration(end)}: this file is only {FormatDuration(duration.Value)} long. Left unchanged.");
+        }
+
+        return (start, end);
     }
 
     private static string DescribeRename(string inputPath, string outputPath)
@@ -1001,26 +1027,31 @@ public sealed class MediaConverterEngine
             : string.Empty;
     }
 
-    /// <summary>Dry-run wording. The endpoint is approximate because mkvmerge snaps it to a keyframe.</summary>
-    private static string DescribeTrimPlan(MkvInfo source, TimeSpan? trimEndpoint)
+    /// <summary>
+    /// Dry-run wording. Both bounds are approximate because mkvmerge snaps each to the nearest
+    /// keyframe at or after the requested point — the end runs slightly long, but for the same
+    /// reason the start runs slightly short (a bit more gets cut than asked).
+    /// </summary>
+    private static string DescribeTrimPlan(MkvInfo source, (TimeSpan Start, TimeSpan End)? trimRange)
     {
-        if (trimEndpoint is not { } endpoint)
+        if (trimRange is not { } range)
         {
             return string.Empty;
         }
 
         var from = source.GetDuration();
         var was = from is null ? string.Empty : $" (currently {FormatDuration(from.Value)})";
-        return $"{Environment.NewLine}        Would trim to about {FormatDuration(endpoint)}{was}";
+        var startPart = range.Start > TimeSpan.Zero ? $"from about {FormatDuration(range.Start)} " : string.Empty;
+        return $"{Environment.NewLine}        Would trim {startPart}to about {FormatDuration(range.End)}{was}";
     }
 
     /// <summary>
-    /// Reports what the trim actually produced rather than what was asked for: mkvmerge cuts on the
-    /// next keyframe at or after the requested point, so the result runs slightly long.
+    /// Reports what the trim actually produced rather than what was asked for: mkvmerge cuts each
+    /// bound on the next keyframe at or after the requested point.
     /// </summary>
-    private static string DescribeTrimResult(MkvInfo source, MkvInfo output, TimeSpan? trimEndpoint)
+    private static string DescribeTrimResult(MkvInfo source, MkvInfo output, (TimeSpan Start, TimeSpan End)? trimRange)
     {
-        if (trimEndpoint is null)
+        if (trimRange is null)
         {
             return string.Empty;
         }
@@ -1030,7 +1061,7 @@ public sealed class MediaConverterEngine
 
         if (before is null || after is null)
         {
-            return $"{Environment.NewLine}        Trimmed the end";
+            return $"{Environment.NewLine}        Trimmed";
         }
 
         return $"{Environment.NewLine}        Trimmed: {FormatDuration(before.Value)} -> {FormatDuration(after.Value)}";
@@ -1095,6 +1126,11 @@ public sealed class MediaConverterEngine
         if (options.OpenInMkvToolNixGui && !File.Exists(options.MkvToolNixGuiPath))
         {
             throw new ArgumentException($"mkvtoolnix-gui.exe not found: {options.MkvToolNixGuiPath}");
+        }
+
+        if (options.TrimFromStart < TimeSpan.Zero)
+        {
+            throw new ArgumentException("Trim from start cannot be negative.");
         }
 
         if (options.TrimFromEnd < TimeSpan.Zero)

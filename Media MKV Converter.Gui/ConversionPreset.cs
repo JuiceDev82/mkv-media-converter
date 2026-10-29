@@ -23,6 +23,8 @@ public sealed class ConversionPreset
 
     public bool ExcludeCommentaryTracks { get; set; } = true;
 
+    public string? TrimFromStart { get; set; }
+
     public string? TrimFromEnd { get; set; }
 
     public string? TrimNameAfter { get; set; }

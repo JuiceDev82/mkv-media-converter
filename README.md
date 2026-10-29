@@ -17,7 +17,7 @@ Supported inputs: `.mkv`, `.mp4`, `.avi`. Output is always MKV.
 
 ## Languages
 
-By default the tool keeps English only. Pass `--languages` (console) or tick boxes under **Settings → Languages** (GUI) to keep more:
+By default the tool keeps English only. Pass `--languages` (console) or tick boxes under **Settings → Tracks → Languages** (GUI) to keep more:
 
 ```powershell
 MediaMkvConverter "D:\Videos" --languages eng,fre,jpn
@@ -39,34 +39,34 @@ Two rules apply on every language selection:
 
 ### Primary audio language
 
-`--primary-language <code>` (console) or **Settings → Primary Language** (GUI) picks which kept audio track auto-selects on playback. **Defaults to `eng`** whenever English is among the languages you're keeping and you haven't typed anything else; leave it blank to get that default, or type a different code to override it. It must be one of your selected languages — picking `fre` while only keeping `eng,jpn` is refused up front. If English isn't one of your kept languages and you didn't set anything, there's no implicit default.
+`--primary-language <code>` (console) or **Settings → Tracks → Primary Language** (GUI) picks which kept audio track auto-selects on playback. **Defaults to `eng`** whenever English is among the languages you're keeping and you haven't typed anything else; leave it blank to get that default, or type a different code to override it. It must be one of your selected languages — picking `fre` while only keeping `eng,jpn` is refused up front. If English isn't one of your kept languages and you didn't set anything, there's no implicit default.
 
 This still applies with only one audio track surviving the remux, which matters more than it sounds: mkvmerge copies each kept track's own default-track flag from the *source* rather than recomputing it, so if the original file's default was a different track that got dropped (foreign-default source with the video, say), the lone remaining track can come out of the remux still flagged non-default even though it's the only audio there is. This setting corrects that explicitly, so the language you asked to keep is always the one that plays automatically.
 
 ### Commentary tracks
 
-Commentary tracks are excluded by default — `--include-commentary` (console) or unchecking **Settings → Exclude Commentary Tracks** (GUI) turns that off. Language selection alone can't filter these out, since a commentary track usually carries the *same* language tag as the main one; this instead looks for `commentary` in the track's own name. If a language you selected turns out to have *only* a commentary track and no plain one, the file is left untouched with an error explaining why, the same safety net as having no matching language at all.
+Commentary tracks are excluded by default — `--include-commentary` (console) or unchecking **Settings → Tracks → Exclude Commentary Tracks** (GUI) turns that off. Language selection alone can't filter these out, since a commentary track usually carries the *same* language tag as the main one; this instead looks for `commentary` in the track's own name. If a language you selected turns out to have *only* a commentary track and no plain one, the file is left untouched with an error explaining why, the same safety net as having no matching language at all.
 
-## Trimming the end
+## Trimming the start and end
 
-To drop trailing credits, give `--trim-end` (console) or fill in **Settings → Trim From End** (GUI) with how much to cut:
+To drop an intro/recap and/or trailing credits, give `--trim-start`/`--trim-end` (console) or fill in **Settings → Video Trimming → Trim From Start**/**Trim From End** (GUI) with how much to cut from each side. Either can be used alone or together:
 
 ```powershell
-MediaMkvConverter "D:\Videos\Show" --trim-end 10m
+MediaMkvConverter "D:\Videos\Show" --trim-start 1m30s --trim-end 10m
 ```
 
-Accepted forms: `10m`, `90s`, `1h30m`, `30 sec`, `00:10:00`, `10:00` (mm:ss), or a bare number, which means minutes. The duration is subtracted from each file's own length, so a folder of differently-sized episodes each lose the same tail.
+Accepted forms: `10m`, `90s`, `1h30m`, `30 sec`, `00:10:00`, `10:00` (mm:ss), or a bare number, which means minutes. Each duration is relative to the file's own length, so a folder of differently-sized episodes all lose the same head and/or tail.
 
 Two things to know before relying on it:
 
-- **The cut lands on a keyframe, so you keep slightly more than you asked for.** Remuxing copies compressed video untouched, and a cut is only possible where a keyframe starts. mkvmerge moves the point forward to the next one, which typically leaves a few extra seconds. It errs toward keeping content rather than cutting into it. Frame-exact trimming would require re-encoding, which this tool deliberately does not do.
-- **A file shorter than the trim is left alone** and reported as a failure naming its actual length.
+- **Both cuts land on a keyframe, but that cuts opposite ways.** Remuxing copies compressed video untouched, and a cut is only possible where a keyframe starts; mkvmerge always moves the requested point forward to the next one. For the end, that means you keep slightly *more* than you asked for. For the start, it means the opposite: the kept footage begins a little later than requested, so slightly *more* gets trimmed off the front than you asked for. Frame-exact trimming would require re-encoding, which this tool deliberately does not do.
+- **A file too short for the requested trim(s) is left alone** and reported as a failure naming its actual length.
 
-The log reports the real result — `Trimmed: 45:00 -> 35:04` — rather than the requested figure, so you can see where the cut actually landed. Run with `--dry-run` first to preview.
+The log reports the real result — `Trimmed: 45:00 -> 35:04` — rather than the requested figures, so you can see where the cuts actually landed. Run with `--dry-run` first to preview.
 
 ## Trimming file names
 
-To strip release tags off the end of names, give `--trim-name` (console) or fill in **Settings → Trim Name After** (GUI) with a pattern. Everything after the first match is dropped and the `.mkv` extension is kept:
+To strip release tags off the end of names, give `--trim-name` (console) or fill in **Settings → File Naming → Trim Name After** (GUI) with a pattern. Everything after the first match is dropped and the `.mkv` extension is kept:
 
 ```powershell
 MediaMkvConverter "D:\Videos\Show" --trim-name "S01E**"
@@ -89,7 +89,7 @@ Two details worth knowing:
 
 ### Removing text from anywhere in the name
 
-`--trim-name` only cuts a suffix. To delete specific text wherever it appears — including in the middle of the part you're keeping — give `--remove-from-name` (console) or **Settings → Remove From Name** (GUI) a comma-separated list. Each entry is deleted everywhere it occurs, case-insensitively, and runs *after* `--trim-name`:
+`--trim-name` only cuts a suffix. To delete specific text wherever it appears — including in the middle of the part you're keeping — give `--remove-from-name` (console) or **Settings → File Naming → Remove From Name** (GUI) a comma-separated list. Each entry is deleted everywhere it occurs, case-insensitively, and runs *after* `--trim-name`:
 
 ```powershell
 MediaMkvConverter "D:\Videos\Show" --trim-name "S01E**" --remove-from-name "PROPER,REPACK"
@@ -104,7 +104,7 @@ Whatever dots, dashes or spaces the removal leaves stranded next to each other a
 
 ### Replacing characters in the name
 
-Removal only ever deletes. To swap one piece of text for another — the common case being punctuation, like turning dots into spaces for readability — give `--replace-in-name` (console) or **Settings → Replace In Name** (GUI) comma-separated `find=replace` pairs. Each pair is applied in order, case-insensitively, *after* both `--trim-name` and `--remove-from-name`:
+Removal only ever deletes. To swap one piece of text for another — the common case being punctuation, like turning dots into spaces for readability — give `--replace-in-name` (console) or **Settings → File Naming → Replace In Name** (GUI) comma-separated `find=replace` pairs. Each pair is applied in order, case-insensitively, *after* both `--trim-name` and `--remove-from-name`:
 
 ```powershell
 MediaMkvConverter "D:\Videos\Show" --replace-in-name ".= "
@@ -149,7 +149,7 @@ Movie.2024.1080p.BluRay-GRP.mkv
 
 ## Parallel processing
 
-By default files are processed one at a time on the console (`--parallel <n>` raises that); the GUI's **Parallel Files** spinner defaults to 2 instead, since that's a safe starting point for most setups. Try 2–4 and see what your disk can take — remuxing is I/O-bound, so a spinning HDD may get *slower*, not faster, with more than one file writing to it at once. Correctness doesn't change: the same collision guard, audio and duration safety checks apply regardless of how many files run at once. Two things do change above 1:
+By default files are processed one at a time on the console (`--parallel <n>` raises that); the GUI's **Settings → General → Parallel Files** spinner defaults to 2 instead, since that's a safe starting point for most setups. Try 2–4 and see what your disk can take — remuxing is I/O-bound, so a spinning HDD may get *slower*, not faster, with more than one file writing to it at once. Correctness doesn't change: the same collision guard, audio and duration safety checks apply regardless of how many files run at once. Two things do change above 1:
 
 - **Log lines interleave.** Every stage line names its own file (`[Show.S01E07.mkv] -> remux (25%)`), so the log stays readable, just no longer strictly one file at a time top to bottom.
 - **A same-run naming collision is decided by timing, not alphabetical order.** Sequentially, the first file alphabetically always wins a collision. In parallel, whichever file's inspect stage happens to finish first wins — still exactly one winner, the rest still refused and reported as failures, just no longer predictable in advance.
@@ -182,6 +182,7 @@ MediaMkvConverter <rootPath> [options]
   --languages <codes>    Audio/subtitle languages to keep. Default: eng
   --primary-language <c> Audio language to flag as default. Default: eng, if kept
   --include-commentary   Keep commentary-named audio tracks. Default: excluded
+  --trim-start <dur>     Cut this much off the start, e.g. intros/recaps. Default: none
   --trim-end <duration>  Cut this much off the end, e.g. credits. Default: none
   --trim-name <pattern>  Cut the file name short after this pattern. Default: none
   --remove-from-name <s> Comma-separated text to delete from the file name. Default: none
@@ -200,7 +201,14 @@ Any file whose path contains the skip fragment (`\Processing\` by default) is pa
 
 ## GUI
 
-`Media MKV Converter.Gui` is a WinForms shell over the same engine: input and output folder pickers, a preset picker, the tool paths, the skip fragment, the language checkboxes, the primary-language, trim-from-end, trim-name, remove-from-name and replace-in-name fields, a Parallel Files spinner, and toggles for subfolder traversal, folder-structure mirroring, overwrite, dry-run, and commentary exclusion. Progress lines are colour-coded by event kind.
+`Media MKV Converter.Gui` is a WinForms shell over the same engine: input and output folder pickers, a preset picker, and — under **Show Settings** — the same options the console exposes, grouped into labeled sections rather than one long list:
+
+- **General** — the MKVToolNix folder, Verify In MKVToolNix, the skip fragment, and run-behavior toggles (overwrite, dry run, subfolder traversal, folder-structure mirroring, Parallel Files).
+- **Tracks** — languages to keep, primary language, and commentary-track exclusion.
+- **Video Trimming** — Trim From Start and Trim From End.
+- **File Naming** — Trim Name After, Remove From Name, and Replace In Name.
+
+Progress lines are colour-coded by event kind.
 
 `AppIcon.ico` (a generated play-badge icon) is embedded into the exe via `<ApplicationIcon>` and re-applied to the running window at startup — see `MainForm.ApplyApplicationIcon`. To use your own icon instead, replace the file and keep the name, or update `<ApplicationIcon>` in the `.csproj` to point at a different one.
 

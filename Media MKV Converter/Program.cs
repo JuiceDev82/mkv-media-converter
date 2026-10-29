@@ -63,6 +63,7 @@ internal static class ProgramEntry
         var languages = new List<string>();
         string? primaryLanguage = null;
         var excludeCommentaryTracks = true;
+        var trimFromStart = TimeSpan.Zero;
         var trimFromEnd = TimeSpan.Zero;
         string? trimNameAfter = null;
         var removeFromName = new List<string>();
@@ -155,6 +156,18 @@ internal static class ProgramEntry
                 continue;
             }
 
+            if (arg.Equals("--trim-start", StringComparison.OrdinalIgnoreCase))
+            {
+                var rawTrim = RequireValue(args, ref index, arg);
+                if (!DurationParser.TryParse(rawTrim, out trimFromStart))
+                {
+                    throw new ArgumentException(
+                        $"Invalid duration for --trim-start: '{rawTrim}'. Try 10m, 90s, 1h30m or 00:10:00.");
+                }
+
+                continue;
+            }
+
             if (arg.Equals("--trim-end", StringComparison.OrdinalIgnoreCase))
             {
                 var rawTrim = RequireValue(args, ref index, arg);
@@ -238,6 +251,7 @@ internal static class ProgramEntry
             PrimaryLanguage = primaryLanguage,
             ExcludeCommentaryTracks = excludeCommentaryTracks,
             MaxParallelFiles = maxParallelFiles,
+            TrimFromStart = trimFromStart,
             TrimFromEnd = trimFromEnd,
             TrimNameAfter = trimNameAfter,
             RemoveFromName = removeFromName,
@@ -289,6 +303,7 @@ internal static class ProgramEntry
         Console.WriteLine("  --primary-language <c> Audio language to flag as default. Default: eng, if kept");
         Console.WriteLine("  --include-commentary   Keep commentary-named audio tracks. Default: excluded");
         Console.WriteLine("  --parallel <n>         Process this many files at once. Default: 1 (sequential)");
+        Console.WriteLine("  --trim-start <dur>     Cut this much off the start, e.g. intros/recaps. Default: none");
         Console.WriteLine("  --trim-end <duration>  Cut this much off the end, e.g. credits. Default: none");
         Console.WriteLine("  --trim-name <pattern>  Cut the file name short after this pattern. Default: none");
         Console.WriteLine("  --remove-from-name <s> Comma-separated text to delete from the file name. Default: none");
@@ -326,9 +341,10 @@ internal static class ProgramEntry
         Console.WriteLine("  Match this to your disk and CPU — a spinning HDD can get slower with more, not faster.");
         Console.WriteLine();
         Console.WriteLine("Trimming:");
-        Console.WriteLine("  --trim-end takes 10m, 90s, 1h30m, 00:10:00 or 10:00. A bare number means minutes.");
-        Console.WriteLine("  mkvmerge cuts on a keyframe, so the result lands near that point, not exactly on it.");
-        Console.WriteLine("  A file shorter than the trim is left alone and reported as a failure.");
+        Console.WriteLine("  --trim-start/--trim-end take 10m, 90s, 1h30m, 00:10:00 or 10:00. A bare number means minutes.");
+        Console.WriteLine("  mkvmerge cuts each bound on a keyframe at or after the requested point: the end runs");
+        Console.WriteLine("  slightly long, but for the same reason --trim-start cuts a little more than asked.");
+        Console.WriteLine("  A file too short for the requested trim is left alone and reported as a failure.");
         Console.WriteLine();
         Console.WriteLine("Name trimming:");
         Console.WriteLine("  --trim-name drops everything after the first match, keeping the .mkv extension.");
