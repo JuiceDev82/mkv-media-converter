@@ -31,6 +31,14 @@ public sealed class MediaConverterOptions
     public string SkipFragment { get; init; } = @"\Processing\";
 
     /// <summary>
+    /// File extensions (without the leading dot — "mkv", not ".mkv") a file must have to be picked up
+    /// at all. Defaults to this tool's own three supported containers. An *empty* list — only reachable
+    /// by explicitly clearing it, since this default is never blank — means no filtering at all: every
+    /// file under the root is a candidate, regardless of extension. See <see cref="FileFormatParser"/>.
+    /// </summary>
+    public IReadOnlyList<string> FileFormats { get; init; } = [".mkv", ".mp4", ".avi"];
+
+    /// <summary>
     /// Specific file paths to leave out of this run, on top of <see cref="SkipFragment"/> — the GUI's
     /// preview-list checkboxes feed this. Purely additive: it can only remove files from a run, never
     /// add back ones <see cref="SkipFragment"/> already excludes. Always empty from the console, which
@@ -150,7 +158,6 @@ public sealed record FilePreviewEntry(string FullPath, bool WillBeSkipped);
 
 public sealed class MediaConverterEngine
 {
-    private static readonly string[] SupportedExtensions = [".mkv", ".mp4", ".avi"];
     private static readonly string[] ForcedSubtitleKeywords = ["forced", "foreign"];
     private readonly JsonSerializerOptions _jsonOptions = new()
     {
@@ -168,6 +175,9 @@ public sealed class MediaConverterEngine
         var totalStopwatch = Stopwatch.StartNew();
         var files = EnumerateInputFiles(options).ToList();
         var runSummaryLines = new List<string> { $"Found {files.Count} supported file(s) under {options.RootPath}" };
+        runSummaryLines.Add(options.FileFormats.Count > 0
+            ? $"File formats: {string.Join(", ", options.FileFormats.Select(extension => extension.TrimStart('.')))}"
+            : "File formats: all (no extension filter)");
         runSummaryLines.Add($"Keeping languages: {string.Join(", ", languages)}");
         if (!string.IsNullOrWhiteSpace(primaryLanguage))
         {
@@ -329,9 +339,16 @@ public sealed class MediaConverterEngine
             ? SearchOption.AllDirectories
             : SearchOption.TopDirectoryOnly;
 
-        return Directory.EnumerateFiles(options.RootPath, "*.*", searchOption)
-            .Where(path => SupportedExtensions.Contains(Path.GetExtension(path), StringComparer.OrdinalIgnoreCase))
-            .OrderBy(path => path, StringComparer.OrdinalIgnoreCase);
+        var files = Directory.EnumerateFiles(options.RootPath, "*.*", searchOption);
+
+        // An empty FileFormats list means "don't filter at all" — the property's own default is
+        // never empty, so this only triggers when a user has deliberately cleared it.
+        if (options.FileFormats.Count > 0)
+        {
+            files = files.Where(path => options.FileFormats.Contains(Path.GetExtension(path), StringComparer.OrdinalIgnoreCase));
+        }
+
+        return files.OrderBy(path => path, StringComparer.OrdinalIgnoreCase);
     }
 
     private static bool ShouldSkip(string filePath, MediaConverterOptions options)

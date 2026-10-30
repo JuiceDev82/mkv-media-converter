@@ -59,6 +59,7 @@ internal static class ProgramEntry
         string? mkvToolNixGuiPath = null;
         var openInMkvToolNixGui = false;
         var skipFragment = @"\Processing\";
+        string? rawFileFormats = null;
         string? outputPath = null;
         var languages = new List<string>();
         string? primaryLanguage = null;
@@ -210,6 +211,12 @@ internal static class ProgramEntry
                 continue;
             }
 
+            if (arg.Equals("--file-formats", StringComparison.OrdinalIgnoreCase))
+            {
+                rawFileFormats = RequireValue(args, ref index, arg);
+                continue;
+            }
+
             if (arg.Equals("--output", StringComparison.OrdinalIgnoreCase))
             {
                 outputPath = RequireValue(args, ref index, arg);
@@ -247,6 +254,7 @@ internal static class ProgramEntry
             MkvToolNixGuiPath = mkvToolNixGuiPath is null ? new MediaConverterOptions().MkvToolNixGuiPath : Path.GetFullPath(mkvToolNixGuiPath),
             OpenInMkvToolNixGui = openInMkvToolNixGui,
             SkipFragment = skipFragment,
+            FileFormats = rawFileFormats is null ? new MediaConverterOptions().FileFormats : FileFormatParser.Parse(rawFileFormats),
             Languages = languages.Count == 0 ? [LanguageCatalog.DefaultCode] : languages,
             PrimaryLanguage = primaryLanguage,
             ExcludeCommentaryTracks = excludeCommentaryTracks,
@@ -309,6 +317,7 @@ internal static class ProgramEntry
         Console.WriteLine("  --remove-from-name <s> Comma-separated text to delete from the file name. Default: none");
         Console.WriteLine("  --replace-in-name <s>  Comma-separated find=replace pairs for the file name. Default: none");
         Console.WriteLine("  --skip <fragment>      Path fragment to skip. Default: \\Processing\\");
+        Console.WriteLine("  --file-formats <exts>  Comma-separated file extensions to process. Default: mkv,mp4,avi");
         Console.WriteLine("  --no-subfolders        Process only the input folder itself");
         Console.WriteLine("  --maintain-structure   Recreate input subfolders under --output");
         Console.WriteLine("  --dry-run              Show what would happen without changing files");

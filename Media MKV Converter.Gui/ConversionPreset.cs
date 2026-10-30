@@ -23,6 +23,11 @@ public sealed class ConversionPreset
 
     public bool ExcludeCommentaryTracks { get; set; } = true;
 
+    /// <summary>Comma-separated extensions, e.g. "mkv,mp4,avi". Unlike every other field here this
+    /// one is never really "unset" in practice — the GUI always starts with the default three
+    /// formats already typed in — but a preset can still override it, same as any other field.</summary>
+    public string? FileFormats { get; set; }
+
     public string? TrimFromStart { get; set; }
 
     public string? TrimFromEnd { get; set; }

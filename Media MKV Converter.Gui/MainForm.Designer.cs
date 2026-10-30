@@ -18,6 +18,8 @@ partial class MainForm
     private CheckBox chkOverwrite;
     private Label lblSkip;
     private TextBox txtSkip;
+    private Label lblFileFormats;
+    private TextBox txtFileFormats;
     private Label lblLanguages;
     private CheckedListBox clbLanguages;
     private Label lblPrimaryLanguage;
@@ -111,6 +113,8 @@ partial class MainForm
         chkOverwrite = new CheckBox();
         lblSkip = new Label();
         txtSkip = new TextBox();
+        lblFileFormats = new Label();
+        txtFileFormats = new TextBox();
         lblLanguages = new Label();
         clbLanguages = new CheckedListBox();
         lblPrimaryLanguage = new Label();
@@ -437,7 +441,7 @@ partial class MainForm
         panelAdvanced.Dock = DockStyle.Fill;
         panelAdvanced.Location = new Point(15, 123);
         panelAdvanced.Name = "panelAdvanced";
-        panelAdvanced.Size = new Size(1054, 510);
+        panelAdvanced.Size = new Size(1054, 544);
         panelAdvanced.TabIndex = 11;
         //
         // layoutAdvanced
@@ -459,10 +463,10 @@ partial class MainForm
         layoutAdvanced.Name = "layoutAdvanced";
         layoutAdvanced.RowCount = 4;
         layoutAdvanced.RowStyles.Add(new RowStyle(SizeType.Absolute, 34F));
-        layoutAdvanced.RowStyles.Add(new RowStyle(SizeType.Absolute, 164F));
+        layoutAdvanced.RowStyles.Add(new RowStyle(SizeType.Absolute, 198F));
         layoutAdvanced.RowStyles.Add(new RowStyle(SizeType.Absolute, 182F));
         layoutAdvanced.RowStyles.Add(new RowStyle(SizeType.Absolute, 130F));
-        layoutAdvanced.Size = new Size(1054, 510);
+        layoutAdvanced.Size = new Size(1054, 544);
         layoutAdvanced.TabIndex = 0;
         layoutAdvanced.SetColumnSpan(panelPreset, 2);
         layoutAdvanced.SetColumnSpan(grpGeneral, 3);
@@ -477,7 +481,7 @@ partial class MainForm
         grpGeneral.Dock = DockStyle.Fill;
         grpGeneral.Margin = new Padding(0, 6, 0, 0);
         grpGeneral.Name = "grpGeneral";
-        grpGeneral.Size = new Size(1054, 158);
+        grpGeneral.Size = new Size(1054, 192);
         grpGeneral.TabIndex = 0;
         grpGeneral.TabStop = false;
         grpGeneral.Text = "General";
@@ -494,16 +498,19 @@ partial class MainForm
         layoutGeneral.Controls.Add(chkVerifyInMkvToolNix, 1, 1);
         layoutGeneral.Controls.Add(lblSkip, 0, 2);
         layoutGeneral.Controls.Add(txtSkip, 1, 2);
-        layoutGeneral.Controls.Add(panelAdvancedOptions, 1, 3);
+        layoutGeneral.Controls.Add(lblFileFormats, 0, 3);
+        layoutGeneral.Controls.Add(txtFileFormats, 1, 3);
+        layoutGeneral.Controls.Add(panelAdvancedOptions, 1, 4);
         layoutGeneral.Dock = DockStyle.Fill;
         layoutGeneral.Location = new Point(3, 19);
         layoutGeneral.Name = "layoutGeneral";
-        layoutGeneral.RowCount = 4;
+        layoutGeneral.RowCount = 5;
         layoutGeneral.RowStyles.Add(new RowStyle(SizeType.Absolute, 34F));
         layoutGeneral.RowStyles.Add(new RowStyle(SizeType.Absolute, 34F));
         layoutGeneral.RowStyles.Add(new RowStyle(SizeType.Absolute, 34F));
         layoutGeneral.RowStyles.Add(new RowStyle(SizeType.Absolute, 34F));
-        layoutGeneral.Size = new Size(1048, 136);
+        layoutGeneral.RowStyles.Add(new RowStyle(SizeType.Absolute, 34F));
+        layoutGeneral.Size = new Size(1048, 170);
         layoutGeneral.TabIndex = 0;
         layoutGeneral.SetColumnSpan(chkVerifyInMkvToolNix, 2);
         layoutGeneral.SetColumnSpan(panelAdvancedOptions, 2);
@@ -747,6 +754,26 @@ partial class MainForm
         txtSkip.Size = new Size(833, 23);
         txtSkip.TabIndex = 4;
         txtSkip.TextChanged += txtSkip_TextChanged;
+        //
+        // lblFileFormats
+        //
+        lblFileFormats.Anchor = AnchorStyles.Left;
+        lblFileFormats.AutoSize = true;
+        lblFileFormats.Location = new Point(3, 77);
+        lblFileFormats.Name = "lblFileFormats";
+        lblFileFormats.Size = new Size(76, 15);
+        lblFileFormats.TabIndex = 5;
+        lblFileFormats.Text = "File Formats";
+        //
+        // txtFileFormats
+        //
+        txtFileFormats.Anchor = AnchorStyles.Left | AnchorStyles.Right;
+        txtFileFormats.Location = new Point(118, 73);
+        txtFileFormats.Name = "txtFileFormats";
+        txtFileFormats.PlaceholderText = "Comma-separated extensions, e.g. mkv,mp4,avi,mov - blank processes every file";
+        txtFileFormats.Size = new Size(833, 23);
+        txtFileFormats.TabIndex = 6;
+        txtFileFormats.TextChanged += txtFileFormats_TextChanged;
         //
         // lblLanguages
         //
@@ -1177,9 +1204,9 @@ partial class MainForm
         // 
         AutoScaleDimensions = new SizeF(7F, 15F);
         AutoScaleMode = AutoScaleMode.Font;
-        ClientSize = new Size(1084, 1139);
+        ClientSize = new Size(1084, 1173);
         Controls.Add(layoutRoot);
-        MinimumSize = new Size(960, 1078);
+        MinimumSize = new Size(960, 1112);
         Name = "MainForm";
         StartPosition = FormStartPosition.CenterScreen;
         Text = "Media MKV Converter";

@@ -124,7 +124,9 @@ Multiple pairs run in sequence, so `.= ,_= ` turns both dots and underscores int
 
 ## Presets (GUI)
 
-The **Preset** dropdown at the top of Settings saves and restores the "what kind of show is this" fields in one step: languages, primary language, commentary exclusion, and all four name/trim settings (including Replace In Name — a saved preset preserves a trailing-space replacement exactly, the same as typing it fresh). **Save As...** names and stores the current values (`%AppData%\MediaMkvConverter\presets.json`); picking a preset from the list applies it immediately; **Delete** removes the selected one. Deliberately left out: folder paths, the skip fragment, tool paths, and the overwrite/dry-run/maintain-structure/parallel-files toggles — those describe how *this run* behaves, not what kind of content it is, so they stay with the current session rather than being saved into a reusable profile.
+The **Preset** dropdown at the top of Settings saves and restores the "what kind of show is this" fields in one step: file formats, languages, primary language, commentary exclusion, and all five name/trim settings (including Replace In Name — a saved preset preserves a trailing-space replacement exactly, the same as typing it fresh). **Save As...** names and stores the current values (`%AppData%\MediaMkvConverter\presets.json`); picking a preset from the list applies it immediately; **Delete** removes the selected one. Deliberately left out: folder paths, the skip fragment, tool paths, and the overwrite/dry-run/maintain-structure/parallel-files toggles — those describe how *this run* behaves, not what kind of content it is, so they stay with the current session rather than being saved into a reusable profile.
+
+File Formats is the one field here that behaves a little differently from the rest: a preset saved before this field existed has nothing stored for it, and applying that preset shows the default `mkv,mp4,avi` rather than leaving the box empty — picking an old preset never silently switches you to "process every file."
 
 A preset named exactly **Default** is special: it's selected and applied automatically every time the app opens, instead of the picker starting blank. The very first time you run the app (or any time "Default" doesn't exist — say you deleted it), one is created automatically from the form's own starting values and saved, so there's always a real "Default" to load and build on. From then on, saving over it (pick **Save As...**, keep the name `Default`, confirm the overwrite) is the normal way to change what loads next time — every other preset still has to be picked by hand, same as before.
 
@@ -189,6 +191,7 @@ MediaMkvConverter <rootPath> [options]
   --replace-in-name <s>  Comma-separated find=replace pairs for the file name. Default: none
   --parallel <n>         Process this many files at once. Default: 1 (sequential)
   --skip <fragment>      Path fragment to skip. Default: \Processing\
+  --file-formats <exts>  Comma-separated file extensions to process. Default: mkv,mp4,avi
   --no-subfolders        Process only the input folder itself
   --maintain-structure   Recreate input subfolders under --output
   --dry-run              Show what would happen without changing files
@@ -199,11 +202,13 @@ Exit code is `0` when every file succeeded, `1` otherwise.
 
 Any file whose path contains the skip fragment (`\Processing\` by default) is passed over — handy for pointing the converter at a library that has an active download or staging folder inside it.
 
+Only files with an extension in `--file-formats` (console) or **Settings → General → File Formats** (GUI) are even considered — `.mkv`, `.mp4` and `.avi` by default. Add more (`mkv,mp4,avi,mov,webm`) to widen it, restrict it to just the one you care about, or clear the field entirely to stop filtering by extension and consider every file in the folder — that last option is mostly useful for pointing at an already-narrow folder, since mkvmerge will simply fail (and report a failure, not a crash) on anything that isn't actually a media container it can read.
+
 ## GUI
 
 `Media MKV Converter.Gui` is a WinForms shell over the same engine: input and output folder pickers, a preset picker, and — under **Show Settings** — the same options the console exposes, grouped into labeled sections rather than one long list:
 
-- **General** — the MKVToolNix folder, Verify In MKVToolNix, the skip fragment, and run-behavior toggles (overwrite, dry run, subfolder traversal, folder-structure mirroring, Parallel Files).
+- **General** — the MKVToolNix folder, Verify In MKVToolNix, the skip fragment, which file formats to process, and run-behavior toggles (overwrite, dry run, subfolder traversal, folder-structure mirroring, Parallel Files).
 - **Tracks** — languages to keep, primary language, and commentary-track exclusion.
 - **Video Trimming** — Trim From Start and Trim From End.
 - **File Naming** — Trim Name After, Remove From Name, and Replace In Name.

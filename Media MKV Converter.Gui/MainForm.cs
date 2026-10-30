@@ -57,6 +57,7 @@ public partial class MainForm : Form
         txtMkvToolNixFolder.Leave += (_, _) => SaveToolPaths();
 
         txtSkip.Text = @"\Processing\";
+        txtFileFormats.Text = DefaultFileFormatsText();
         chkOverwrite.Checked = true;
         chkTraverseSubfolders.Checked = true;
         chkMaintainFolderStructure.Checked = false;
@@ -229,6 +230,11 @@ public partial class MainForm : Form
         RestartFilePreviewDebounce();
     }
 
+    private void txtFileFormats_TextChanged(object? sender, EventArgs e)
+    {
+        RestartFilePreviewDebounce();
+    }
+
     private void FilePreviewDebounceTimer_Tick(object? sender, EventArgs e)
     {
         _filePreviewDebounceTimer.Stop();
@@ -361,6 +367,7 @@ public partial class MainForm : Form
             RootPath = rootPath,
             TraverseSubfolders = chkTraverseSubfolders.Checked,
             SkipFragment = string.IsNullOrWhiteSpace(txtSkip.Text) ? @"\Processing\" : txtSkip.Text.Trim(),
+            FileFormats = FileFormatParser.Parse(txtFileFormats.Text),
         };
 
         lblFilePreviewSummary.Text = "Scanning...";
@@ -689,6 +696,12 @@ public partial class MainForm : Form
         }
     }
 
+    /// <summary>The File Formats field's own default value, as comma-separated text with no leading
+    /// dots — reads <see cref="MediaConverterOptions.FileFormats"/>'s own default rather than
+    /// repeating the literal "mkv,mp4,avi" a second time, so the two can't drift apart.</summary>
+    private static string DefaultFileFormatsText() =>
+        string.Join(',', new MediaConverterOptions().FileFormats.Select(extension => extension.TrimStart('.')));
+
     /// <summary>Builds a <see cref="ConversionPreset"/> from the current state of every field a
     /// preset covers. Shared by the explicit Save button and the first-launch auto-create of
     /// "Default", so the two can never map fields differently. Returns null when no language is
@@ -707,6 +720,11 @@ public partial class MainForm : Form
             Languages = languages,
             PrimaryLanguage = string.IsNullOrWhiteSpace(txtPrimaryLanguage.Text) ? null : txtPrimaryLanguage.Text.Trim(),
             ExcludeCommentaryTracks = chkExcludeCommentary.Checked,
+            // Not collapsed to null when blank, unlike every other optional field here: null means
+            // "this preset predates the File Formats field," which ApplyPreset falls back to the
+            // default list for, while "" means the user deliberately cleared it to process every
+            // file and saved that choice — the two need to stay distinguishable.
+            FileFormats = txtFileFormats.Text.Trim(),
             TrimFromStart = string.IsNullOrWhiteSpace(txtTrimStart.Text) ? null : txtTrimStart.Text.Trim(),
             TrimFromEnd = string.IsNullOrWhiteSpace(txtTrimEnd.Text) ? null : txtTrimEnd.Text.Trim(),
             TrimNameAfter = string.IsNullOrWhiteSpace(txtTrimName.Text) ? null : txtTrimName.Text.Trim(),
@@ -739,6 +757,7 @@ public partial class MainForm : Form
 
         txtPrimaryLanguage.Text = preset.PrimaryLanguage ?? string.Empty;
         chkExcludeCommentary.Checked = preset.ExcludeCommentaryTracks;
+        txtFileFormats.Text = preset.FileFormats ?? DefaultFileFormatsText();
         txtTrimStart.Text = preset.TrimFromStart ?? string.Empty;
         txtTrimEnd.Text = preset.TrimFromEnd ?? string.Empty;
         txtTrimName.Text = preset.TrimNameAfter ?? string.Empty;
@@ -929,6 +948,7 @@ public partial class MainForm : Form
             MkvToolNixGuiPath = Path.GetFullPath(mkvToolNixGuiPath),
             OpenInMkvToolNixGui = chkVerifyInMkvToolNix.Checked,
             SkipFragment = string.IsNullOrWhiteSpace(txtSkip.Text) ? @"\Processing\" : txtSkip.Text.Trim(),
+            FileFormats = FileFormatParser.Parse(txtFileFormats.Text),
             TraverseSubfolders = chkTraverseSubfolders.Checked,
             MaintainFolderStructure = chkMaintainFolderStructure.Checked,
             DryRun = chkDryRun.Checked,
@@ -1186,6 +1206,8 @@ public partial class MainForm : Form
         txtOutputFolder.Enabled = !isRunning;
         chkOverwrite.Enabled = !isRunning;
         txtSkip.Enabled = !isRunning;
+        lblFileFormats.Enabled = !isRunning;
+        txtFileFormats.Enabled = !isRunning;
         txtMkvToolNixFolder.Enabled = !isRunning;
         chkVerifyInMkvToolNix.Enabled = !isRunning;
         chkDryRun.Enabled = !isRunning;
